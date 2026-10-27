@@ -701,6 +701,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     alert('جاري حفظ التحديثات على جيت هب...');
     try {
         // 1. جلب الـ SHA الحالي للملف من جيت هب
+      console.log("الـ Token الحالي هو:", token);
         const getRes = await fetch(apiUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
