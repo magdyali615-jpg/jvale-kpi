@@ -689,60 +689,63 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 </script>
   <script>
-   // التوكن مشفر بـ Base64 عشان جيت هب ميعملوش حظر وهو في الريبو العام
-const owner = 'magdyali615-jpg';
-const repo = 'jvale-kpi';
-const path = 'index.html';
-const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`; 
-const encodedToken = "Z2hwX1F5UmprbU1qSnlhcFZNWHRNVkJNemh0NHZSZjVZNzBuNEhHUg==";
-const token = atob(encodedToken);
+ const GH = { owner: 'magdyali615-jpg', repo: 'jvale-kpi', path: 'data.json', branch: 'main' };
+const b64 = s => { const b = new TextEncoder().encode(s); let x = ''; for (let i = 0; i < b.length; i += 0x8000) x += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(x); };
 
-    async function saveMyWebsite() {
-    alert('جاري حفظ التحديثات على جيت هب...');
-    try {
-        // 1. جلب الـ SHA الحالي للملف من جيت هب
-      console.log("الـ Token الحالي هو:", token);
-        const getRes = await fetch(apiUrl, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (!getRes.ok) {
-            throw new Error('فشل جلب بيانات الملف من جيت هب. تأكد من صحة الـ Token واسم الريبو.');
-        }
-        
-        const fileData = await getRes.json();
-        const sha = fileData.sha;
-
-        // 2. تجهيز محتوى الصفحة بالكامل بعد التعديل
-        const htmlContent = document.documentElement.outerHTML;
-        const encodedContent = btoa(unescape(encodeURIComponent(htmlContent)));
-
-        // 3. إرسال الملف المحدث إلى جيت هب
-        const putRes = await fetch(apiUrl, {
-            method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                message: 'Update index.html automatically from website',
-                content: encodedContent,
-                sha: sha
-            })
-        });
-
-        if (putRes.ok) {
-            alert('تم حفظ التحديثات ونشرها على الموقع بنجاح! 🚀');
-        } else {
-            const errData = await putRes.json();
-            throw new Error(errData.message || 'فشل حفظ التحديثات.');
-        }
-
-    } catch (error) {
-        console.error(error);
-        alert('خطأ: ' + error.message);
+async function saveMyWebsite(dataObj) {
+  let t = localStorage.getItem('gh_token');
+  if (!t) {
+    t = (prompt('الصق الـ Token (بيتحفظ على جهازك بس)') || '').trim();
+    if (!t) throw new Error('اتلغى');
+    localStorage.setItem('gh_token', t);
+  }
+  const url = `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`;
+  const H = { 'Authorization': 'Bearer ' + t, 'Accept': 'application/vnd.github+json' };
+  
+  let sha; 
+  const g = await fetch(`${url}?ref=${GH.branch}&t=${Date.now()}`, { headers: H });
+  if (g.status === 200) sha = (await g.json()).sha;
+  else if (g.status !== 404) {
+    if (g.status === 401) localStorage.removeItem('gh_token');
+    throw new Error('GitHub ' + g.status + ' — راجع الـ Token وصلاحياته');
+  }
+  
+  const p = await fetch(url, {
+    method: 'PUT',
+    headers: H,
+    body: JSON.stringify({
+      message: 'update data',
+      content: b64(JSON.stringify(dataObj)),
+      branch: GH.branch,
+      ...(sha ? { sha } : {})
+    })
+  });
+  if (!p.ok) throw new Error('فشل الحفظ ' + p.status);
+}
     }
 }
 </script>
-  <button onclick="saveMyWebsite()" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px; font-size: 16px; font-family: Tahoma;">حفظ التغييرات</button>
+  <script>
+  let state = {}; // متغير الحالة العام
+
+  // دالة قراءة البيانات من data.json
+  async function loadData() {
+    try {
+      const r = await fetch('data.json?' + Date.now()); 
+      if (r.ok) {
+        state = await r.json();
+        console.log("تم تحميل البيانات بنجاح:", state);
+        
+        // هنا تحط الدوال بتاعتك اللي بتعرض البيانات في الصفحة بعد ما تحمل
+        // renderUI(); 
+      }
+    } catch (error) {
+      console.error("حصل مشكلة في قراءة ملف البيانات:", error);
+    }
+  }
+
+  // أول ما الصفحة تفتح، الدالة تشتغل وتجيب البيانات
+  window.addEventListener('DOMContentLoaded', loadData);
+</script>
+ <button onclick="saveMyWebsite(state)" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px; font-size: 16px; font-family: Tahoma;">حفظ التغييرات</button>
 </body></html>
