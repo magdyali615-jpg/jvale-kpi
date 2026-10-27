@@ -722,27 +722,52 @@ async function saveMyWebsite(dataObj) {
   });
   if (!p.ok) throw new Error('فشل الحفظ ' + p.status);
    
-}
+<script>
+  let state = {};
 
-  let state = {}; // متغير الحالة العام
-
-  // دالة قراءة البيانات من data.json
+  // دالة تحميل البيانات
   async function loadData() {
     try {
       const r = await fetch('data.json?' + Date.now()); 
       if (r.ok) {
         state = await r.json();
         console.log("تم تحميل البيانات بنجاح:", state);
-        
-        // هنا تحط الدوال بتاعتك اللي بتعرض البيانات في الصفحة بعد ما تحمل
-        // renderUI(); 
       }
     } catch (error) {
-      console.error("حصل مشكلة في قراءة ملف البيانات:", error);
+      console.error("مشكلة في التحميل:", error);
     }
   }
 
-  // أول ما الصفحة تفتح، الدالة تشتغل وتجيب البيانات
+  // دالة الحفظ المربوطة بزرار الحفظ
+  async function saveMyWebsite(dataObj) {
+    const token = localStorage.getItem('gh_token') || prompt("الصق الـ Token هنا (بيحفظ على جهازك بس)").trim();
+    if (!token) throw new Error('اتلغى');
+    localStorage.setItem('gh_token', token);
+
+    const GH = { owner: 'magdyali615-jpg', repo: 'jvale-kpi', path: 'data.json', branch: 'main' };
+    const url = `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`;
+    const H = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' };
+
+    let sha;
+    const g = await fetch(`${url}?ref=${GH.branch}&t=${Date.now()}`, { headers: H });
+    if (g.status === 200) sha = (await g.json()).sha;
+    else if (g.status !== 404) throw new Error('GitHub خطأ ' + g.status);
+
+    const p = await fetch(url, {
+      method: 'PUT',
+      headers: H,
+      body: JSON.stringify({
+        message: 'update data',
+        content: btoa(unescape(encodeURIComponent(JSON.stringify(dataObj)))),
+        branch: GH.branch,
+        ...(sha ? { sha } : {})
+      })
+    });
+    if (!p.ok) throw new Error('فشل الحفظ ' + p.status);
+    alert('تم الحفظ بنجاح يا معلم!');
+  }
+
+  // تشغيل التحميل أول ما الصفحة تفتح
   window.addEventListener('DOMContentLoaded', loadData);
 </script>
  <button onclick="saveMyWebsite(state)" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px; font-size: 16px; font-family: Tahoma;">حفظ التغييرات</button>
