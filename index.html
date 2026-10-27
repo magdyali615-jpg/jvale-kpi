@@ -690,13 +690,12 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
   <script>
    // التوكن مشفر بـ Base64 عشان جيت هب ميعملوش حظر وهو في الريبو العام
-const encodedToken = "Z2hwXzZoczFwM3Q0Q0c0Z1hrY01iQmkyRUxKVTZ2VVIzUjBEYzFwYw==";
-const token = atob(encodedToken);
-
 const owner = 'magdyali615-jpg';
 const repo = 'jvale-kpi';
 const path = 'index.html';
-const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`; 
+const encodedToken = "Z2hwXzZoczFwM3Q0Q0c0Z1hrY01iQmkyRUxKVTZ2VVIzUjBEYzFwYw==";
+const token = atob(encodedToken);   
 
     async function saveMyWebsite() {
     alert('جاري حفظ التحديثات على جيت هب...');
