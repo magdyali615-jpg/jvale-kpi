@@ -688,40 +688,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   render();pill();initFile();});
 })();
 </script>
-  <script>
- const GH = { owner: 'magdyali615-jpg', repo: 'jvale-kpi', path: 'data.json', branch: 'main' };
-const b64 = s => { const b = new TextEncoder().encode(s); let x = ''; for (let i = 0; i < b.length; i += 0x8000) x += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(x); };
+<script>
+  const GH = { owner: 'magdyali615-jpg', repo: 'jvale-kpi', path: 'data.json', branch: 'main' };
+  const b64 = s => { const b = new TextEncoder().encode(s); let x = ''; for (let i = 0; i < b.length; i += 0x8000) x += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(x); };
 
-async function saveMyWebsite(dataObj) {
-  let t = localStorage.getItem('gh_token');
-  if (!t) {
-    t = (prompt('الصق الـ Token (بيتحفظ على جهازك بس)') || '').trim();
-    if (!t) throw new Error('اتلغى');
-    localStorage.setItem('gh_token', t);
-  }
-  const url = `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`;
-  const H = { 'Authorization': 'Bearer ' + t, 'Accept': 'application/vnd.github+json' };
-  
-  let sha; 
-  const g = await fetch(`${url}?ref=${GH.branch}&t=${Date.now()}`, { headers: H });
-  if (g.status === 200) sha = (await g.json()).sha;
-  else if (g.status !== 404) {
-    if (g.status === 401) localStorage.removeItem('gh_token');
-    throw new Error('GitHub ' + g.status + ' — راجع الـ Token وصلاحياته');
-  }
-  
-  const p = await fetch(url, {
-    method: 'PUT',
-    headers: H,
-    body: JSON.stringify({
-      message: 'update data',
-      content: b64(JSON.stringify(dataObj)),
-      branch: GH.branch,
-      ...(sha ? { sha } : {})
-    })
-  });
-  if (!p.ok) throw new Error('فشل الحفظ ' + p.status);
-   
   let state = {};
 
   // دالة تحميل البيانات
@@ -739,35 +709,40 @@ async function saveMyWebsite(dataObj) {
 
   // دالة الحفظ المربوطة بزرار الحفظ
   async function saveMyWebsite(dataObj) {
-    const token = localStorage.getItem('gh_token') || prompt("الصق الـ Token هنا (بيحفظ على جهازك بس)").trim();
-    if (!token) throw new Error('اتلغى');
-    localStorage.setItem('gh_token', token);
-
-    const GH = { owner: 'magdyali615-jpg', repo: 'jvale-kpi', path: 'data.json', branch: 'main' };
+    let t = localStorage.getItem('gh_token');
+    if (!t) {
+      t = (prompt('الصق الـ Token (بيتحفظ على جهازك بس)') || '').trim();
+      if (!t) throw new Error('اتلغى');
+      localStorage.setItem('gh_token', t);
+    }
     const url = `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`;
-    const H = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' };
+    const H = { 'Authorization': 'Bearer ' + t, 'Accept': 'application/vnd.github+json' };
 
-    let sha;
+    let sha; 
     const g = await fetch(`${url}?ref=${GH.branch}&t=${Date.now()}`, { headers: H });
     if (g.status === 200) sha = (await g.json()).sha;
-    else if (g.status !== 404) throw new Error('GitHub خطأ ' + g.status);
+    else if (g.status !== 404) {
+      if (g.status === 401) localStorage.removeItem('gh_token');
+      throw new Error('GitHub ' + g.status + ' — راجع الـ Token وصلاحياته');
+    }
 
     const p = await fetch(url, {
       method: 'PUT',
       headers: H,
       body: JSON.stringify({
         message: 'update data',
-        content: btoa(unescape(encodeURIComponent(JSON.stringify(dataObj)))),
+        content: b64(JSON.stringify(dataObj)),
         branch: GH.branch,
         ...(sha ? { sha } : {})
       })
     });
     if (!p.ok) throw new Error('فشل الحفظ ' + p.status);
-    alert('تم الحفظ بنجاح يا معلم!');
+    alert('تم الحفظ بنجاح !');
   }
 
   // تشغيل التحميل أول ما الصفحة تفتح
   window.addEventListener('DOMContentLoaded', loadData);
-  </script>
-   <button onclick="saveMyWebsite(state)" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px; font-size: 16px; font-family: Tahoma;">حفظ التغييرات</button>
+</script>
+
+<button onclick="saveMyWebsite(state)" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px; font-size: 16px; font-family: Tahoma;">حفظ التغييرات</button>
 </body></html>
