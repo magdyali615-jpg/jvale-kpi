@@ -812,7 +812,58 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   // تشغيل التحميل أوتوماتيك أول ما الصفحة تفتح
   window.addEventListener('DOMContentLoaded', loadData);
+  
 </script>
+<script>
+  // دالة تحديث البيانات وقراءتها فوراً من GitHub بدون كاش
+  async function refreshData() {
+    try {
+      // بنضيف Timestamp في آخر الرابط (?t=Date.now) عشان نمنع المتصفح إنه يقرأ من الكاش القديم
+      const rawUrl = `https://raw.githubusercontent.com/${GH.owner}/${GH.repo}/${GH.branch}/${GH.path}?t=` + Date.now();
+      
+      const r = await fetch(rawUrl);
+      if (r.ok) {
+        const savedData = await r.json();
+        console.log("تم جلب أحدث بيانات:", savedData);
+
+        // إعادة تعبئة الـ Inputs في الصفحة تلقائياً بالداتا الجديدة
+        if (savedData.inputs) {
+          Object.keys(savedData.inputs).forEach(key => {
+            const el = document.getElementById(key) || document.querySelector(`[name="${key}"]`);
+            if (el) {
+              const val = savedData.inputs[key];
+              if (typeof val === 'object' && val !== null && 'checked' in val) {
+                el.checked = val.checked;
+              } else {
+                el.value = val;
+              }
+              // إطلاق أحداث التغيير عشان لو الصفحة فيها حسابات أوتوماتيك تشتغل
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          });
+        }
+        alert('تم تحديث البيانات وجلب أحدث تسجيل بنجاح! 🔄');
+      } else {
+        alert('فشل جلب البيانات من السيرفر.');
+      }
+    } catch (error) {
+      console.error("خطأ أثناء التحديث:", error);
+      alert('حصلت مشكلة أثناء تحديث البيانات.');
+    }
+  }
+</script>
+
+<!-- أزرار التحكم في الصفحة -->
+<div style="margin: 10px 0;">
+  <button onclick="saveMyWebsite()" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-family: Tahoma; font-weight: bold; margin-left: 10px;">
+    💾 حفظ التغييرات
+  </button>
+
+  <button onclick="refreshData()" style="background: #17a2b8; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-family: Tahoma; font-weight: bold;">
+    🔄 تحديث البيانات
+  </button>
+</div>
 
 <button onclick="saveMyWebsite()" style="background: #28a745; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; margin: 10px; font-size: 16px; font-family: Tahoma; font-weight: bold;">حفظ التغييرات ورفعها لـ GitHub</button>
 </body></html>
