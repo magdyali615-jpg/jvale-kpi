@@ -711,7 +711,7 @@ document.addEventListener('DOMContentLoaded',()=>{
             const updatedHtmlContent = document.documentElement.outerHTML;
             
             // 3. تحويل المحتوى لصيغة Base64 عشان يدعم العربي بدون أخطاء
-            const encodedContent = bota(unescape(encodeURIComponent(updatedHtmlContent)));
+            const encodedContent = btoa(unescape(encodeURIComponent(updatedHtmlContent)));
 
             // 4. إرسال الملف المحدث لـ جيت هب
             const putRes = await fetch(apiUrl, {
