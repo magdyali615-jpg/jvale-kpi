@@ -695,9 +695,12 @@ document.addEventListener('DOMContentLoaded',()=>{
   let state = {};
 
   // دالة تحميل البيانات
+  // دالة تحميل البيانات المحدثة فوراً للكل
   async function loadData() {
     try {
-      const r = await fetch('data.json?' + Date.now()); 
+      // السحب المباشر من رابط الـ Raw عشان التحديث يظهر لأي حد في نفس اللحظة
+      const rawUrl = `https://raw.githubusercontent.com/${GH.owner}/${GH.repo}/${GH.branch}/data.json?t=` + Date.now();
+      const r = await fetch(rawUrl); 
       if (r.ok) {
         state = await r.json();
         console.log("تم تحميل البيانات بنجاح:", state);
