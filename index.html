@@ -687,4 +687,56 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('#rs').onclick=()=>{if(confirm('إرجاع الإعدادات والداتا للنسخة الأصلية اللي جوه البرنامج؟'))({}),(S=fromDefaults(),save(),render(),toast('اترجعت النسخة الأصلية'));};
   render();pill();initFile();});
 })();
-</script></body></html>
+</script>
+  <script>
+    // ⚠️ حط بياناتك هنا
+    const owner =  'magdyali615-jpg'
+    const repo = 'jvale-kpi'
+    const path = 'index.html';           // اسم ملف الـ HTML بتاعك (لو اسمه index.html سيبه زي ما هو)
+    const token = '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'
+
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+
+    async function saveMyWebsite() {
+        alert('جاري حفظ التحديثات على جيت هب...');
+        try {
+            // 1. جلب الـ SHA الحالي للملف من جيت هب
+            const getRes = await fetch(apiUrl, {
+                headers: { 'Authorization': `token ${token}` }
+            });
+            const fileData = await getRes.json();
+            const sha = fileData.sha;
+
+            // 2. هنجيب محتوى الصفحة بالكامل بعد التعديلات
+            const updatedHtmlContent = document.documentElement.outerHTML;
+            
+            // 3. تحويل المحتوى لصيغة Base64 عشان يدعم العربي بدون أخطاء
+            const encodedContent = bota(unescape(encodeURIComponent(updatedHtmlContent)));
+
+            // 4. إرسال الملف المحدث لـ جيت هب
+            const putRes = await fetch(apiUrl, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'Auto-update website from browser',
+                    content: encodedContent,
+                    sha: sha
+                })
+            });
+
+            if (putRes.ok) {
+                alert('تم حفظ الموقع وتحديثه على جيت هب بنجاح! ✅ اعمل ريفرش بعد ثواني وهتشوف النتيجة.');
+            } else {
+                alert('فشل الحفظ، تأكد من صحة الـ Token واسم الريبو.');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('حصل خطأ في الاتصال.');
+        }
+    }
+</script>
+  <button onclick="saveMyWebsite()" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px; font-size: 16px; font-family: Tahoma;">حفظ التغييرات</button>
+</body></html>
