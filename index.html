@@ -692,48 +692,98 @@ document.addEventListener('DOMContentLoaded',()=>{
   const GH = { owner: 'magdyali615-jpg', repo: 'jvale-kpi', path: 'data.json', branch: 'main' };
   const b64 = s => { const b = new TextEncoder().encode(s); let x = ''; for (let i = 0; i < b.length; i += 0x8000) x += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(x); };
 
-  // دالة الحفظ الذكية (بتجمع الداتا من الشاشة وترفعها لوحدها)
+  let state = {};
+
+  // 1. دالة تجميع أي نوع داتا موجود في الصفحة (Inputs, Tables, State)
+  function collectAllData() {
+    const payload = {
+      lastUpdated: new Date().toISOString(),
+      inputs: {},
+      tables: [],
+      customState: typeof state !== 'undefined' ? state : {}
+    };
+
+    // أ- تجميع كل الإنبوتس والخانات
+    document.querySelectorAll('input, select, textarea').forEach((el, idx) => {
+      const key = el.id || el.name || `input_${idx}`;
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        payload.inputs[key] = { checked: el.checked, value: el.value };
+      } else {
+        payload.inputs[key] = el.value;
+      }
+    });
+
+    // ب- تجميع كل الجداول الموجودة في الصفحة
+    document.querySelectorAll('table').forEach((table, tIdx) => {
+      const tableData = [];
+      table.querySelectorAll('tr').forEach((row) => {
+        const rowData = [];
+        row.querySelectorAll('th, td').forEach((cell) => {
+          rowData.push(cell.innerText.trim());
+        });
+        if (rowData.length > 0) tableData.push(rowData);
+      });
+      payload.tables.push({ tableIndex: tIdx, tableId: table.id || '', rows: tableData });
+    });
+
+    return payload;
+  }
+
+  // 2. دالة عرض البيانات واسترجاعها في الصفحة أوتوماتيك
+  async function loadData() {
+    try {
+      // السحب المباشر من Raw لتفادي الكاش
+      const rawUrl = `https://raw.githubusercontent.com/${GH.owner}/${GH.repo}/${GH.branch}/${GH.path}?t=` + Date.now();
+      const r = await fetch(rawUrl);
+      if (!r.ok) return;
+
+      const savedData = await r.json();
+      console.log("تم تحميل البيانات الحالية من GitHub:", savedData);
+
+      // إعادة تعبئة الـ Inputs تلقائياً
+      if (savedData.inputs) {
+        Object.keys(savedData.inputs).forEach(key => {
+          const el = document.getElementById(key) || document.querySelector(`[name="${key}"]`);
+          if (el) {
+            const val = savedData.inputs[key];
+            if (typeof val === 'object' && val !== null && 'checked' in val) {
+              el.checked = val.checked;
+            } else {
+              el.value = val;
+            }
+            // إطلاق حدث التغيير لضمان إعادة حساب المعادلات لو الصفحة فيها JS
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
+      }
+
+      if (savedData.customState) {
+        state = savedData.customState;
+      }
+    } catch (error) {
+      console.error("خطأ أثناء تحميل البيانات:", error);
+    }
+  }
+
+  // 3. دالة الحفظ والرفع لـ GitHub
   async function saveMyWebsite() {
     let t = localStorage.getItem('gh_token');
     if (!t) {
       t = (prompt('الصق الـ Token (بيتحفظ على جهازك بس)') || '').trim();
       if (!t) {
-        alert('تم إلغاء الحفظ عشان مفيش تكن.');
+        alert('تم إلغاء الحفظ.');
         return;
       }
       localStorage.setItem('gh_token', t);
     }
 
-    // 1. اجمع الداتا اللي في الجدول أو الشاشة أوتوماتيك
-    // (ده مثال بيجمع الصفوف من الجدول، هنظبطه حسب الشاشة عندك)
-    const rows = document.querySelectorAll('table tr'); 
-    let tableData = [];
-    
-    rows.forEach((row, index) => {
-      if (index === 0) return; // لو أول صف عبارة عن العناوين (Headers) نتخطاه
-      const cols = row.querySelectorAll('td');
-      if (cols.length > 0) {
-        tableData.push({
-          machine: cols[0]?.innerText.trim() || '',
-          availability: cols[1]?.innerText.trim() || '',
-          performance: cols[2]?.innerText.trim() || '',
-          quality: cols[3]?.innerText.trim() || '',
-          oee: cols[4]?.innerText.trim() || ''
-        });
-      }
-    });
-
-    const dataObj = {
-      lastUpdated: new Date().toISOString(),
-      updatedBy: "Magdy Ali",
-      records: tableData
-    };
-
+    const dataObj = collectAllData();
     const url = `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`;
     const H = { 'Authorization': 'Bearer ' + t, 'Accept': 'application/vnd.github+json' };
 
     try {
-      let sha; 
+      let sha;
       const g = await fetch(`${url}?ref=${GH.branch}&t=${Date.now()}`, { headers: H });
       if (g.status === 200) sha = (await g.json()).sha;
       else if (g.status !== 404) {
@@ -745,7 +795,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         method: 'PUT',
         headers: H,
         body: JSON.stringify({
-          message: 'update OEE data automatically',
+          message: 'Update complete site data automatically',
           content: b64(JSON.stringify(dataObj, null, 2)),
           branch: GH.branch,
           ...(sha ? { sha } : {})
@@ -753,12 +803,15 @@ document.addEventListener('DOMContentLoaded',()=>{
       });
 
       if (!p.ok) throw new Error('فشل الحفظ ' + p.status);
-      alert('تم حفظ البيانات ورفعها على جيت هب بنجاح يا عم مجدي! 🚀');
+      alert('تم حفظ كافة البيانات ورفعها بنجاح! 🚀');
     } catch (err) {
-      alert('خطأ: ' + err.message);
+      alert('خطأ أثناء الحفظ: ' + err.message);
       console.error(err);
     }
   }
+
+  // تشغيل التحميل أوتوماتيك أول ما الصفحة تفتح
+  window.addEventListener('DOMContentLoaded', loadData);
 </script>
 
 <button onclick="saveMyWebsite()" style="background: #28a745; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; margin: 10px; font-size: 16px; font-family: Tahoma; font-weight: bold;">حفظ التغييرات ورفعها لـ GitHub</button>
