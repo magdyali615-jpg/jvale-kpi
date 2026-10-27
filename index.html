@@ -702,7 +702,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         try {
             // 1. جلب الـ SHA الحالي للملف من جيت هب
             const getRes = await fetch(apiUrl, {
-                headers: { 'Authorization': `token ${token}` }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             const fileData = await getRes.json();
             const sha = fileData.sha;
