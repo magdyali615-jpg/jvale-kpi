@@ -29,6 +29,11 @@ details.chk{border:1px solid var(--line);border-radius:10px;padding:8px 14px;mar
 .dbar{display:flex;gap:6px;overflow-x:auto;padding:4px 0 10px;margin-bottom:6px}.dchip{white-space:nowrap;border-radius:14px;padding:3px 12px}.dchip.done{background:rgba(24,121,78,.14);color:var(--good)}.dchip.part{background:rgba(154,91,0,.16);color:var(--warn)}.dchip.sel{outline:2px solid var(--acc)}
 #toasts{position:fixed;bottom:18px;left:18px;display:flex;flex-direction:column;gap:8px;z-index:60}.toast{background:#17623f;color:#fff;padding:11px 16px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.28);max-width:480px;font-size:13.5px}.toast.warn{background:#9a5b00}
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}.modal{position:fixed;inset:0;background:rgba(10,18,28,.5);display:flex;align-items:center;justify-content:center;z-index:70}.mbox{background:var(--card);padding:22px;border-radius:14px;max-width:480px;width:92%;box-shadow:0 12px 40px rgba(0,0,0,.4)}.mbox p{margin:0 0 14px;line-height:1.8}
+.trk-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:6px 0 14px}.tile{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:10px 14px}.tile b{display:block;font-size:21px;color:var(--pri)}.tile span{font-size:12px;color:var(--mut)}
+.vchips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 14px}.vchip{display:inline-flex;gap:6px;align-items:center;background:var(--soft);border:1px solid var(--line);border-radius:16px;padding:3px 12px;cursor:pointer;margin:0!important}.vchip.off{opacity:.45;text-decoration:line-through}.vchip small{color:var(--mut)}.sug{cursor:pointer}
+.flow{display:flex;gap:6px;align-items:stretch;overflow-x:auto;padding:4px 2px 12px;margin-bottom:8px}.stg{min-width:215px;max-width:290px;flex:1 0 215px;background:var(--card);border:1px solid var(--line);border-top:4px solid var(--acc);border-radius:10px;padding:10px 12px;box-shadow:var(--shadow)}
+.stg-h{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:8px;color:var(--pri)}.stg-h>span:last-child{font-size:12px;color:var(--mut)}.stn{display:inline-block;font-size:11px;color:#fff;background:var(--acc);border-radius:10px;padding:0 8px;margin-inline-end:6px}
+.arr{align-self:center;color:var(--acc);font-size:18px;flex:0 0 auto}.wci{border-top:1px dashed var(--line);padding:6px 0}.stg-h+.wci{border-top:0}.wcn{font-weight:700}.wcm{font-size:12px;color:var(--mut)}.wcv{font-size:12px;color:var(--warn);margin-top:2px}
 </style></head><body>
 <header><h1><span class="brand">Jvale</span><span class="sep">|</span>قسم الإنتاج<small>منظومة متابعة مؤشرات الأداء الصناعي (OEE)</small></h1><label class="btn">فتح ملف<input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv,.json" hidden></label><button id="xr" title="تصدير تقرير Excel بنفس تنسيق الشيتات للإرسال">تصدير تقرير Excel</button><span id="savest" class="pill ok"></span><button id="bk" title="حفظ في ملف على جهازك (يُحدَّد المكان مرة واحدة ثم يتم الحفظ تلقائيًا)">حفظ الآن</button><button id="rs">استعادة الإعدادات الأولية</button></header>
 <div id="tabs"></div><main id="view"></main><div id="toasts"></div>
@@ -504,7 +509,7 @@ const SIMOPT=v=>`<option value="1" ${v==1?'selected':''}>مطابق بعد ال�
 function prodClusters(rows,thr){rows=rows.filter(r=>!isStop(r)&&K.norm(r.prod));const names=[...new Set(rows.map(r=>K.norm(r.prod)))],cl=clusterNames(names,thr),g=new Map();
   for(const r of rows){const root=cl.get(K.norm(r.prod));let c=g.get(root);if(!c){c={keys:new Set(),variants:new Map(),wcs:new Map(),qty:0,hrs:0,days:new Set(),last:0};g.set(root,c);}
     const rp=r.prod.trim();c.keys.add(K.norm(r.prod));c.variants.set(rp,(c.variants.get(rp)||0)+1);c.qty+=+r.qty||0;c.hrs+=+r.hrs||0;c.days.add(r.day);if(r.day>c.last)c.last=r.day;
-    const wn=K.norm(r.wc);let w=c.wcs.get(wn);if(!w){w={wc:r.wc,rows:0,days:new Set(),qty:0,hrs:0};c.wcs.set(wn,w);}w.rows++;w.days.add(r.day);w.qty+=+r.qty||0;w.hrs+=+r.hrs||0;}
+    const wn=K.norm(r.wc);let w=c.wcs.get(wn);if(!w){w={wc:r.wc,rows:0,days:new Set(),qty:0,hrs:0,prods:new Set()};c.wcs.set(wn,w);}w.prods.add(rp);w.rows++;w.days.add(r.day);w.qty+=+r.qty||0;w.hrs+=+r.hrs||0;}
   return [...g.values()].map(c=>{c.name=[...c.variants.entries()].sort((a,b)=>b[1]-a[1])[0][0];return c;});}
 /* ---------- totals (grouped by department) ---------- */
 function drawTot(){const C=calcTotals(),m=TT.mode,sub=$('#tsub').checked;
@@ -521,42 +526,99 @@ function drawTot(){const C=calcTotals(),m=TT.mode,sub=$('#tsub').checked;
   const ch=runChecks(C),bad=ch.filter(c=>c.level==='warn').length;
   $('#tchk').innerHTML=`<div class="hs ${bad?'warn':'ok'}">${bad?`⚠ ${bad} تنبيه محتاج مراجعة`:'✔ لا يوجد أخطاء في البيانات التي في الفترة دي'}</div>`+ch.map(c=>`<details ${c.level==='warn'&&c.items.length?'open':''} class="chk ${c.level}"><summary>${c.level==='ok'?'✔':c.level==='warn'?'⚠':'ℹ'} ${esc(c.title)}${c.items.length?` — <b>${c.items.length}</b>`:''}</summary>${c.items.length?`<ul class="lst">${c.items.slice(0,60).map(i=>`<li>${esc(i)}</li>`).join('')}${c.items.length>60?`<li class="muted">... و${c.items.length-60} كمان</li>`:''}</ul>`:''}</details>`).join('');
   drawMulti(C.rows);}
-const TM={q:'',wc:'',day:'',min:2,cross:false,sort:'wcs',limit:10,opened:new Map()};
+/* ---------- item tracker: fuzzy search + route through manufacturing stages ---------- */
+function stoks(raw){let s=String(raw||'').toLowerCase().replace(/[\u064B-\u065F\u0670\u0640]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي')
+    .replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+  s=s.replace(/(\d)[.,](\d)/g,'$1p$2').replace(/(\d)\s*[*×x]\s*(?=\d)/g,'$1x');
+  let t=s.split(/[^\p{L}\p{N}]+/u).filter(Boolean).flatMap(x=>x.match(/\d+(?:x\d+)*|[^\d]+/g)||[]);
+  t=t.map(x=>/^\d+(x\d+)+$/.test(x)?x.split('x').sort((a,b)=>a-b).join('x'):x).map(x=>x.length>3&&x.startsWith('ال')?x.slice(2):x);
+  return t;}
+const TOKC=new Map();function stoksC(n){let t=TOKC.get(n);if(!t){t=stoks(n);TOKC.set(n,t);}return t;}
+function tokScore(q,it,full,acc){let best=0;
+  if(/^\d/.test(q)){
+    for(const x of it){if(x===q)return 1;if(x.indexOf('x')>=0&&q.indexOf('x')<0&&x.split('x').includes(q))best=Math.max(best,.85);}
+    if(!best&&q.indexOf('x')>=0&&q.split('x').every(n=>it.includes(n)))best=.8;
+    return best;}
+  for(const x of it){if(x===q)return 1;if(/^\d/.test(x))continue;
+    if(q.length>=2&&x.includes(q))best=Math.max(best,q.length/x.length>=.5?.92:.8);
+    else if(x.length>=3&&q.includes(x))best=Math.max(best,x.length/q.length>=.5?.92:.8);
+    if(q.length>=4&&x.length>=4){const sim=1-lev(q,x)/Math.max(q.length,x.length);if(sim>=acc)best=Math.max(best,sim*.85);}}
+  if(!best&&q.length>=3&&full.includes(q))best=.75;
+  return best;}
+function matchScore(qt,it,acc){const full=it.join('');let sum=0;for(const q of qt){const s=tokScore(q,it,full,acc);if(!s)return 0;sum+=s;}return sum/qt.length;}
+const stageOrd=d=>{const i=S.depts.indexOf(d);return i<0?99:i;};
+const TM={q:'',wc:'',day:'',min:2,cross:false,sort:'wcs',limit:10,opened:new Map(),acc:0.75,off:new Set(),ord:'dept'};
 function drawMulti(rowsAll){const days=[...new Set(rowsAll.map(r=>r.day))].sort((a,b)=>a-b);if(TM.day!==''&&!days.includes(+TM.day))TM.day='';
   const wcs=[...new Map(rowsAll.map(r=>[K.norm(r.wc),r.wc])).values()].sort();if(TM.wc&&!wcs.includes(TM.wc))TM.wc='';
   $('#mwc').innerHTML='<option value="">كل مراكز العمل</option>'+wcs.map(w=>`<option ${w===TM.wc?'selected':''}>${esc(w)}</option>`).join('');
   $('#mday').innerHTML='<option value="">كل أيام الفترة</option>'+days.map(d=>`<option value="${d}" ${String(d)===String(TM.day)?'selected':''}>${iso(d)}</option>`).join('');
-  const rows=TM.day===''?rowsAll:rowsAll.filter(r=>r.day===+TM.day);const q=K.norm(TM.q),wcn=K.norm(TM.wc);
+  const rows=(TM.day===''?rowsAll:rowsAll.filter(r=>r.day===+TM.day)).filter(r=>!isStop(r)&&K.norm(r.prod));
+  const qt=stoks(TM.q);if(qt.length)drawTrack(rows,qt,rowsAll);else drawList(rows,rowsAll);}
+function drawTrack(rows,qt,rowsAll){const wcn=K.norm(TM.wc),vm=new Map();
+  for(const r of rows){const k=K.norm(r.prod);let v=vm.get(k);if(!v){v={key:k,name:r.prod.trim(),rows:[],wcs:new Set(),qty:0};vm.set(k,v);}v.rows.push(r);v.wcs.add(K.norm(r.wc));v.qty+=+r.qty||0;}
+  let vs=[...vm.values()].filter(v=>{v.sc=matchScore(qt,stoksC(v.name),TM.acc);return v.sc>0;});
+  if(wcn)vs=vs.filter(v=>v.wcs.has(wcn));
+  vs.sort((a,b)=>b.sc-a.sc||b.qty-a.qty);
+  const act=vs.filter(v=>!TM.off.has(v.key)),qtxt=esc(TM.q.trim()),again=()=>drawMulti(rowsAll);
+  if(!vs.length){const qf=qt.join(''),sg=[...vm.values()].map(v=>{const f=stoksC(v.name).join('');return {v,s:1-lev(qf,f)/Math.max(qf.length,f.length,1)};}).filter(x=>x.s>=0.35).sort((a,b)=>b.s-a.s).slice(0,8);
+    $('#mcount').textContent='';
+    $('#mbox').innerHTML=`<div class="hs warn">مفيش صنف مطابق لـ «${qtxt}» في الفترة والفلاتر الحالية.${sg.length?' ممكن تقصد:':' جرّب كلمة أقصر أو «دقة البحث: واسع»، وراجع الفترة وفلتر القسم والتفصيل اللي فوق.'}</div>${sg.length?`<div class="vchips">${sg.map(x=>`<span class="chip pc sug" data-q="${esc(x.v.name)}">${esc(x.v.name)}</span>`).join('')}</div>`:''}`;
+    $$('#mbox [data-q]').forEach(c=>c.onclick=()=>{TM.q=c.dataset.q;TM.off=new Set();$('#mq').value=TM.q;again();});return;}
+  const st=new Map(),ds=new Set();
+  for(const v of act)for(const r of v.rows){const wn=K.norm(r.wc),d=deptOfN(wn)||'غير مُسند';let g=st.get(d);if(!g){g={dept:d,wcs:new Map(),qty:0,hrs:0,first:1e9};st.set(d,g);}
+    let w=g.wcs.get(wn);if(!w){w={wc:r.wc,rows:0,days:new Set(),qty:0,hrs:0,names:new Map()};g.wcs.set(wn,w);}
+    const q=+r.qty||0,h=+r.hrs||0;w.rows++;w.days.add(r.day);w.qty+=q;w.hrs+=h;w.names.set(v.name,(w.names.get(v.name)||0)+1);g.qty+=q;g.hrs+=h;if(r.day<g.first)g.first=r.day;ds.add(r.day);}
+  const stages=[...st.values()].sort(TM.ord==='first'?(a,b)=>a.first-b.first||stageOrd(a.dept)-stageOrd(b.dept):(a,b)=>stageOrd(a.dept)-stageOrd(b.dept)||a.dept.localeCompare(b.dept));
+  const nW=stages.reduce((n,g)=>n+g.wcs.size,0),tq=stages.reduce((n,g)=>n+g.qty,0),th=stages.reduce((n,g)=>n+g.hrs,0),dl=[...ds].sort((a,b)=>a-b),multi=act.length>1;
+  $('#mcount').textContent=`${act.length} من ${vs.length} اسم مطابق — ${stages.length} مرحلة — ${nW} مركز عمل`;
+  const chips=vs.slice(0,80).map(v=>`<label class="vchip ${TM.off.has(v.key)?'off':''}"><input type="checkbox" data-v="${esc(v.key)}" ${TM.off.has(v.key)?'':'checked'}> ${esc(v.name)} <small>${Math.round(v.sc*100)}% · ${r2(v.qty)} · ${v.wcs.size} مركز</small></label>`).join('')+(vs.length>80?`<span class="muted">... و${vs.length-80} كمان — ضيّق البحث</span>`:'');
+  const tile=(n,l)=>`<div class="tile"><b>${n}</b><span>${l}</span></div>`;
+  const flow=stages.map((g,i)=>`${i?'<span class="arr">◀</span>':''}<div class="stg"><div class="stg-h"><span><span class="stn">${i+1}</span><b>${esc(g.dept)}</b></span><span>${r2(g.qty)}</span></div>${[...g.wcs.values()].sort((a,b)=>b.qty-a.qty).map(w=>`<div class="wci"><div class="wcn">${esc(w.wc)}</div><div class="wcm">كمية <b>${r2(w.qty)}</b> · ${r2(w.hrs)} س · ${w.days.size} يوم</div>${multi?`<div class="wcv">مكتوب: ${[...w.names.keys()].map(esc).join(' ، ')}</div>`:''}</div>`).join('')}</div>`).join('');
+  const cols=['المرحلة (القسم)','Work center','الأسماء المكتوبة','عدد الصفوف','عدد الأيام','الكمية','الساعات'],body=[];
+  stages.forEach(g=>[...g.wcs.values()].forEach(w=>body.push([g.dept,w.wc,[...w.names.keys()].join(' | '),w.rows,w.days.size,r2(w.qty),r2(w.hrs)])));
+  $('#mbox').innerHTML=`<div class="hs ok">النتيجة لـ «${qtxt}»${wcn?' — اللي مرّت على «'+esc(TM.wc)+'» بس':''}</div>
+   <h4>الأسماء اللي اتلقت <span class="muted">(شيل العلامة من أي اسم مش قصدك والمسار هيتحدّث)</span></h4><div class="vchips">${chips}</div>
+   ${act.length?`<div class="trk-sum">${tile(stages.length,'مرحلة تصنيع')}${tile(nW,'مركز عمل')}${tile(r2(tq),'إجمالي الكمية')}${tile(r2(th),'ساعات التشغيل')}${tile(dl.length,'يوم'+(dl.length?` (${iso(dl[0]).slice(5)} → ${iso(dl[dl.length-1]).slice(5)})`:''))}</div>
+   <h4>مسار الصنف عبر المراحل <span class="muted">(${TM.ord==='first'?'مرتبة بأول ظهور':'مرتبة بترتيب الأقسام في الإعدادات'})</span></h4><div class="flow">${flow}</div>
+   <div class="bar"><button id="tkcp">نسخ المسار</button><button id="tkxl">تصدير Excel</button></div>
+   <details class="chk info"><summary>جدول التفاصيل</summary><div class="tw"><table class="kt"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${body.map(r=>`<tr>${r.map((v,i)=>`<td class="${i===1?'dn':''}">${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>`
+   :'<div class="hs warn">كل الأسماء متشالة العلامة — حدّد اسم واحد على الأقل</div>'}`;
+  $$('#mbox [data-v]').forEach(c=>c.onchange=()=>{if(c.checked)TM.off.delete(c.dataset.v);else TM.off.add(c.dataset.v);again();});
+  const cp=$('#tkcp');if(cp){cp.onclick=()=>copy([cols].concat(body).map(r=>r.join('\t')).join('\n'),'مسار الصنف');$('#tkxl').onclick=()=>{const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([cols].concat(body)),'Item route');saveXlsx(wb,'Item_Route.xlsx');};}}
+function drawList(rows,rowsAll){const wcn=K.norm(TM.wc);
   let mc=prodClusters(rows,simThr()).filter(c=>c.wcs.size>=TM.min);
-  const deptsOf=c=>new Set([...c.wcs.values()].map(w=>deptOfN(K.norm(w.wc))||'—'));
+  const deptsOf=c=>new Set([...c.wcs.values()].map(w=>deptOfN(K.norm(w.wc))||'—')),path=c=>[...deptsOf(c)].sort((a,b)=>stageOrd(a)-stageOrd(b)).join(' ◀ ');
   if(TM.cross)mc=mc.filter(c=>deptsOf(c).size>1);
   if(wcn)mc=mc.filter(c=>c.wcs.has(wcn));
-  if(q)mc=mc.filter(c=>K.norm(c.name+' '+[...c.variants.keys()].join(' ')+' '+[...c.wcs.values()].map(w=>w.wc).join(' ')).includes(q));
   const srt={wcs:(a,b)=>b.wcs.size-a.wcs.size||a.name.localeCompare(b.name),qty:(a,b)=>b.qty-a.qty,name:(a,b)=>a.name.localeCompare(b.name)};mc.sort(srt[TM.sort]);TT.multi=mc;
   const shown=mc.slice(0,TM.limit);
-  $('#mcount').textContent=mc.length?`${mc.length} صنف مر على ${TM.min}+ مركز عمل${TM.day!==''?' في اليوم ده':''} — معروض ${shown.length}`:'لا يوجد أصناف بالفلاتر دي';
-  $('#mbox').innerHTML=shown.map((c,i)=>{const ws=[...c.wcs.values()],dp=deptsOf(c),key=K.norm(c.name),open=TM.opened.get(key)===true;
-    return `<details class="chk ${dp.size>1?'warn':'info'}" data-mk="${esc(key)}" ${open?'open':''}><summary><b>${esc(c.name)}</b> — ${ws.length} مركز عمل${dp.size>1?' — ⚠ '+dp.size+' أقسام':''} — كمية ${r2(c.qty)}${c.variants.size>1?` <span class="muted">(${c.variants.size} كتابات)</span>`:''}</summary>
+  $('#mcount').textContent=mc.length?`${mc.length} صنف مر على ${TM.min}+ مركز عمل${TM.day!==''?' في اليوم ده':''} — معروض ${shown.length} — اكتب اسم صنف فوق لتتبّع مساره`:'لا يوجد أصناف بالفلاتر دي';
+  $('#mbox').innerHTML=shown.map(c=>{const ws=[...c.wcs.values()],dp=deptsOf(c),key=K.norm(c.name),open=TM.opened.get(key)===true;
+    return `<details class="chk ${dp.size>1?'warn':'info'}" data-mk="${esc(key)}" ${open?'open':''}><summary><b>${esc(c.name)}</b> — ${ws.length} مركز عمل — <span class="muted">${esc(path(c))}</span> — كمية ${r2(c.qty)}${c.variants.size>1?` <span class="muted">(${c.variants.size} كتابات)</span>`:''} <button class="mini" data-tr="${esc(c.name)}">تتبّع المسار</button></summary>
    ${c.variants.size>1?`<p class="muted">الكتابات: ${[...c.variants.entries()].map(([k,n])=>'«'+esc(k)+'» ('+n+')').join(' ، ')}</p>`:''}
    <div class="tw"><table class="kt"><thead><tr><th>Work center</th><th>القسم</th><th>عدد الصفوف</th><th>عدد الأيام</th><th>الكمية</th><th>الساعات</th></tr></thead><tbody>${ws.map(w=>`<tr><td class="dn">${esc(w.wc)}</td><td>${esc(deptOfN(K.norm(w.wc))||'—')}</td><td>${w.rows}</td><td>${w.days.size}</td><td>${r2(w.qty)}</td><td>${r2(w.hrs)}</td></tr>`).join('')}</tbody></table></div></details>`;}).join('')
    +(mc.length>shown.length?`<div class="row"><button id="mmore" class="pri">عرض ${Math.min(TM.limit,mc.length-shown.length)} كمان</button><span class="muted">باقي ${mc.length-shown.length}</span></div>`:'');
-  $$('#mbox details[data-mk]').forEach(d=>d.ontoggle=()=>TM.opened.set(d.dataset.mk,d.open));const mm=$('#mmore');if(mm)mm.onclick=()=>{TM.limit+=TM.limit>=9999?0:Math.max(10,TM.limit);$('#mlim').value=String(TM.limit);drawMulti(rowsAll);};}
+  $$('#mbox details[data-mk]').forEach(d=>d.ontoggle=()=>TM.opened.set(d.dataset.mk,d.open));
+  $$('#mbox [data-tr]').forEach(b=>b.onclick=e=>{e.preventDefault();TM.q=b.dataset.tr;TM.off=new Set();$('#mq').value=TM.q;drawMulti(rowsAll);});
+  const mm=$('#mmore');if(mm)mm.onclick=()=>{TM.limit+=TM.limit>=9999?0:Math.max(10,TM.limit);$('#mlim').value=String(TM.limit);drawMulti(rowsAll);};}
 function viewTot(){ttInit();return `<div class="card"><h3>إجماليات مراكز العمل — كميات الإنتاج وساعات التشغيل (موزعة حسب الأقسام)</h3><div class="row"><label>من</label><input type="date" id="tf" value="${iso(TT.from)}"><label>إلى</label><input type="date" id="tt" value="${iso(TT.to)}">
   <button id="tm">الشهر كله</button><button id="td">اليوم المختار</button><label>التفصيل</label><select id="tmode"><option value="wc">لكل مركز عمل (إجمالي الفترة)</option><option value="day">لكل مركز عمل ولكل يوم</option><option value="prod">لكل مركز عمل ولكل صنف</option></select>
   <label>القسم</label><select id="tdp"><option value="">كل الأقسام</option>${DEPTS_ALL.map(d=>`<option>${esc(d)}</option>`).join('')}</select><label><input type="checkbox" id="tsub" checked> إجمالي كل قسم</label></div>
   <div class="bar"><button id="tcp">نسخ (بدون عناوين)</button><button id="tcph">نسخ مع العناوين</button><button id="txl">تصدير Excel</button><span id="tcount" class="muted"></span></div><div class="tw"><table class="kt" id="ttab"></table></div></div>
-  <div class="card"><h3>الأصناف المسجلة على أكثر من مركز عمل</h3>
-  <div class="row"><input id="mq" placeholder="🔍 بحث بالصنف أو مركز العمل" style="width:220px"><label>مركز عمل</label><select id="mwc"></select><label>اليوم</label><select id="mday"></select><label>تشابه الأسماء</label><select id="tsim">${SIMOPT(simThr())}</select></div>
-  <div class="row"><label>على الأقل</label><select id="mmin"><option value="2">2 مركز عمل</option><option value="3">3</option><option value="4">4</option><option value="5">5+</option></select><label><input type="checkbox" id="mcr"> عبر أقسام مختلفة بس</label><label>ترتيب</label><select id="msort"><option value="wcs">أكتر مركز عمل</option><option value="qty">أكبر كمية</option><option value="name">الاسم</option></select>
-   <label>عدد النتايج</label><select id="mlim"><option>10</option><option>25</option><option>50</option><option value="9999">الكل</option></select><button id="mfold">طيّ الكل</button><button id="munf">فتح الكل</button><span id="mcount" class="muted"></span></div>
-  <p class="muted">بيطابق الأسماء بعد توحيد الحروف العربية (أ/ا، ة/ه، ى/ي) وشيل التشكيل والرموز والمسافات، وبيشترط الأرقام والمقاسات (زي 50*70) تبقى متطابقة بالظبط، والباقي لازم يكون شبه بعض حسب الحساسية. صفوف التوقف مش تُحتسب. اختر يوم عشان تشوف الأصناف التي مرت على أكتر من مركز عمل في اليوم ده بس.</p><div id="mbox"></div></div>
+  <div class="card hotc"><h3>تتبّع الصنف — مساره عبر مراحل التصنيع ومراكز العمل</h3>
+  <div class="row"><input id="mq" placeholder="🔍 اكتب اسم الصنف أو جزء منه — مثال: رف 50*70" style="width:320px"><label>دقة البحث</label><select id="macc"><option value="0.85">دقيق</option><option value="0.75">متوسط</option><option value="0.65">واسع</option></select><label>ترتيب المراحل</label><select id="mord"><option value="dept">حسب ترتيب الأقسام</option><option value="first">حسب أول ظهور</option></select><label>مركز عمل</label><select id="mwc"></select><label>اليوم</label><select id="mday"></select></div>
+  <div class="row"><span class="muted">قايمة الأصناف (لما خانة البحث فاضية):</span><label>على الأقل</label><select id="mmin"><option value="1">1 مركز عمل</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5+</option></select><label><input type="checkbox" id="mcr"> عبر أقسام مختلفة بس</label><label>ترتيب</label><select id="msort"><option value="wcs">أكتر مركز عمل</option><option value="qty">أكبر كمية</option><option value="name">الاسم</option></select>
+   <label>تشابه الأسماء</label><select id="tsim">${SIMOPT(simThr())}</select><label>عدد النتايج</label><select id="mlim"><option>10</option><option>25</option><option>50</option><option value="9999">الكل</option></select><button id="mfold">طيّ الكل</button><button id="munf">فتح الكل</button></div>
+  <div id="mcount" class="muted"></div>
+  <p class="muted">البحث بيتجاهل الفرق بين أ/ا وة/ه والتشكيل والمسافات والرموز، وبيلاقي الكلمة حتى لو جزء من اسم أطول أو فيها غلطة بسيطة، وترتيب الكلمات مش فارق. الأرقام والمقاسات لازم تتطابق (50*70 هي هي 70×50 و٥٠×٧٠). كل اسم متلقى بتقدر تشيله لو مش قصدك، والمسار بيتحدّث على طول. صفوف التوقف مش بتتحسب.</p><div id="mbox"></div></div>
   <div class="card"><h3>التحقق من سلامة البيانات والإجماليات</h3><div id="tchk"></div></div>
   <div class="card"><h3>مطابقة مع أرقام ملف Excel</h3><p class="muted">الصق من شيتك 3 أعمدة: اسم مركز العمل | الكمية | ساعات التشغيل (بدون عناوين). البرنامج بيقارنها بمجاميع الفترة لكل مركز عمل (كل الساعات).</p>
   <textarea id="tcmp" rows="4" placeholder="Work center&#9;الكمية&#9;الساعات"></textarea><div class="row"><button id="tcmpb" class="pri">قارن</button></div><div id="tcmpr"></div></div>`;}
 function bindTot(){const set=()=>{TT.from=isoToSer($('#tf').value)||TT.from;TT.to=isoToSer($('#tt').value)||TT.to;TT.mode=$('#tmode').value;TT.dept=$('#tdp').value;drawTot();};
-  $('#tmode').value=TT.mode;$('#tdp').value=TT.dept;['#tf','#tt','#tmode','#tdp','#tsub'].forEach(s=>$(s).onchange=set);$('#tsim').onchange=e=>{S.settings.simThr=+e.target.value;save();drawTot();};const rr=()=>drawMulti(ttRows());$('#mq').value=TM.q;$('#mq').oninput=e=>{TM.q=e.target.value;TM.limit=+$('#mlim').value;rr();};$('#mwc').onchange=e=>{TM.wc=e.target.value;rr();};$('#mday').onchange=e=>{TM.day=e.target.value;rr();};
+  $('#tmode').value=TT.mode;$('#tdp').value=TT.dept;['#tf','#tt','#tmode','#tdp','#tsub'].forEach(s=>$(s).onchange=set);$('#tsim').onchange=e=>{S.settings.simThr=+e.target.value;save();drawTot();};const rr=()=>drawMulti(ttRows());$('#mq').value=TM.q;$('#mq').oninput=e=>{TM.q=e.target.value;TM.off=new Set();TM.limit=+$('#mlim').value;rr();};$('#macc').value=String(TM.acc);$('#macc').onchange=e=>{TM.acc=+e.target.value;TM.off=new Set();rr();};$('#mord').value=TM.ord;$('#mord').onchange=e=>{TM.ord=e.target.value;rr();};$('#mwc').onchange=e=>{TM.wc=e.target.value;rr();};$('#mday').onchange=e=>{TM.day=e.target.value;rr();};
   $('#mmin').value=String(TM.min);$('#mmin').onchange=e=>{TM.min=+e.target.value;rr();};$('#mcr').checked=TM.cross;$('#mcr').onchange=e=>{TM.cross=e.target.checked;rr();};$('#msort').value=TM.sort;$('#msort').onchange=e=>{TM.sort=e.target.value;rr();};
   $('#mlim').value=String(TM.limit);$('#mlim').onchange=e=>{TM.limit=+e.target.value;rr();};$('#mfold').onclick=()=>{$$('#mbox details').forEach(d=>{d.open=false;TM.opened.set(d.dataset.mk,false);});};$('#munf').onclick=()=>{$$('#mbox details').forEach(d=>{d.open=true;TM.opened.set(d.dataset.mk,true);});};
+  
   $('#tm').onclick=()=>{TT.from=S.settings.monthStart;TT.to=R.eom;$('#tf').value=iso(TT.from);$('#tt').value=iso(TT.to);drawTot();};
   $('#td').onclick=()=>{const d=S.settings.selDay||entryDay();TT.from=TT.to=d;$('#tf').value=$('#tt').value=iso(d);drawTot();};
   const all=()=>TT.last.body.concat([TT.last.tot]);$('#tcp').onclick=()=>copy(TT.last.body.map(r=>r.join('\t')).join('\n'),'التجميع');$('#tcph').onclick=()=>copy([TT.last.cols].concat(all()).map(r=>r.join('\t')).join('\n'),'التجميع بالعناوين');
@@ -574,7 +636,7 @@ function closeItems(){const f=S.settings.monthStart,t=R.eom;
   const cl=clusterNames([...new Set(rows.map(r=>K.norm(r.prod)))],simThr()),canon=new Map(),m=new Map();
   rows.forEach(r=>{const root=cl.get(K.norm(r.prod));if(!canon.has(root))canon.set(root,new Map());const c=canon.get(root),p=r.prod.trim();c.set(p,(c.get(p)||0)+1);});
   const nameOf=root=>[...canon.get(root).entries()].sort((a,b)=>b[1]-a[1])[0][0];
-  for(const r of rows){const root=cl.get(K.norm(r.prod)),wn=K.norm(r.wc),k=r.day+'|'+wn+'|'+root;let it=m.get(k);if(!it){it={day:r.day,wc:r.wc,wn,keys:new Set(),variants:new Set(),qty:0,hrs:0,name:nameOf(root)};m.set(k,it);}
+  for(const r of rows){const root=cl.get(K.norm(r.prod)),wn=K.norm(r.wc),k=r.day+'|'+wn+'|'+root;let it=m.get(k);if(!it){it={day:r.day,wc:r.wc,wn,keys:new Set(),variants:new Set(),qty:0,hrs:0,root,name:nameOf(root)};m.set(k,it);}
     it.keys.add(K.norm(r.prod));it.variants.add(r.prod.trim());it.qty+=+r.qty||0;it.hrs+=+r.hrs||0;}
   const mk=String(f);S.closedD=S.closedD||{};const ent=S.closedD[mk]||(S.closedD[mk]=[]);
   return [...m.values()].map(it=>{const e=ent.find(x=>x.day===it.day&&x.wn===it.wn&&x.keys.some(k=>it.keys.has(k)));const rem=e?it.qty-e.q:it.qty;it.ent=e;it.rem=Math.max(0,rem);it.status=!e?'open':rem>0.0001?'partial':'done';return it;})
@@ -584,7 +646,7 @@ function viewClose(){return `<div class="card hotc"><h3 style="margin-top:0">إ�
    <label>الفترة</label><select id="cmode"><option value="day">يوم واحد</option><option value="range">من يوم لـ يوم</option><option value="all">كل الشهر</option></select>
    <span id="cdayc" class="row" style="margin:0"><button id="cprev">◀</button><select id="cday"></select><button id="cnext">▶</button></span><span id="crng" class="row" style="margin:0"><input type="date" id="cfrom"><input type="date" id="cto"></span></div>
   <div class="row"><label>الحالة</label><select id="cst"><option value="">الكل</option><option value="todo">التي لم يُقفل (جديد + كمية جديدة)</option><option value="open">لم يُقفل</option><option value="partial">فيه كمية جديدة بعد القفل</option><option value="done">تم إقفاله</option></select>
-   <label>التجميع</label><select id="cgr"><option value="day">حسب اليوم</option><option value="wc">حسب مركز العمل</option><option value="flat">قايمة واحدة</option></select><label>عدد الصفوف</label><select id="clim"><option>20</option><option>40</option><option>100</option><option value="9999">الكل</option></select>
+   <label>التجميع</label><select id="cgr"><option value="day">حسب اليوم</option><option value="wc">حسب مركز العمل</option><option value="flat">قايمة واحدة</option><option value="prod">حسب الصنف (يدخل على كام مركز عمل)</option></select><label>عدد الصفوف</label><select id="clim"><option>20</option><option>40</option><option>100</option><option value="9999">الكل</option></select>
    <input id="cq" placeholder="🔍 بحث بالصنف" style="width:170px"><label>تشابه الأسماء</label><select id="csim">${SIMOPT(simThr())}</select><label><input type="checkbox" id="cbar"> شريط الأيام</label></div>
   <div id="cdays" class="dbar"></div><div id="csum" class="hs ok"></div>
   <div class="bar"><button id="ccp">نسخ البنود غير المُقفلة (اليوم / مركز العمل / الصنف / الكمية)</button><button id="call">تحديد المعروض كمُقفل</button><button id="cun">إلغاء تحديد المعروض</button><button id="cfold">طيّ الكل</button><button id="cunfold">فتح الكل</button></div>
@@ -605,13 +667,14 @@ function drawClose(){const all=closeItems();CL.all=all;const days=[...new Set(al
   $('#cdays').style.display=CL.bar?'flex':'none';
   $('#cdays').innerHTML=days.map(d=>{const it=all.filter(i=>i.day===d&&(!CL.wc||i.wc===CL.wc)),dn=it.filter(i=>i.status==='done').length,c=dn===it.length?'done':dn?'part':'none';return `<button class="dchip ${c} ${d===CL.day&&CL.mode==='day'?'sel':''}" data-d="${d}">${iso(d).slice(5)} <b>${dn}/${it.length}</b></button>`;}).join('')||'<span class="muted">لا يوجد أيام</span>';
   $$('#cdays [data-d]').forEach(b=>b.onclick=()=>{CL.mode='day';CL.day=+b.dataset.d;$('#cmode').value='day';drawClose();});
-  const key=i=>CL.group==='day'?String(i.day):CL.group==='wc'?i.wn:'all',lab=i=>CL.group==='day'?iso(i.day):CL.group==='wc'?i.wc:'كل البنود';
-  const groups=new Map();let n=0,more=0;for(const i of shown){const k=key(i);if(!groups.has(k))groups.set(k,{label:lab(i),all:[],show:[]});const g=groups.get(k);g.all.push(i);if(n<CL.limit){g.show.push(i);n++;}else more++;}
+  const key=i=>CL.group==='day'?String(i.day):CL.group==='wc'?i.wn:CL.group==='prod'?i.root:'all',lab=i=>CL.group==='day'?iso(i.day):CL.group==='wc'?i.wc:CL.group==='prod'?i.name:'كل البنود';
+  const pwc=new Map();if(CL.group==='prod')inScope.forEach(i=>{let m=pwc.get(i.root);if(!m)pwc.set(i.root,m=new Map());m.set(i.wn,i.wc);});
+  const groups=new Map();let n=0,more=0;for(const i of (CL.group==='prod'?shown.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar')||a.day-b.day||a.wc.localeCompare(b.wc)):shown)){const k=key(i);if(!groups.has(k))groups.set(k,{label:lab(i),all:[],show:[]});const g=groups.get(k);g.all.push(i);if(n<CL.limit){g.show.push(i);n++;}else more++;}
   const gl=[...groups.entries()],gcols=CL.group==='flat'?0:1;let h='';
   gl.forEach(([k,g],gi)=>{const done=g.all.filter(i=>i.status==='done').length,key2=CL.group+'|'+k,open=CL.opened.has(key2)?CL.opened.get(key2):(CL.group==='flat'||gl.length===1);
     const body=g.show.length?`<div class="tw"><table class="kt"><thead><tr><th>تم إقفاله</th>${CL.group!=='day'?'<th>التاريخ</th>':''}${CL.group!=='wc'?'<th>مركز العمل</th>':''}<th>الصنف</th><th>الكمية</th><th>المقفول</th><th>المتبقي</th><th>الحالة</th></tr></thead><tbody>${g.show.map(i=>`<tr class="${i.status==='done'?'dn2':i.status==='partial'?'bd':''}"><td><input type="checkbox" data-i="${CL.all.indexOf(i)}" ${i.status==='done'?'checked':''}></td>${CL.group!=='day'?`<td>${iso(i.day)}</td>`:''}${CL.group!=='wc'?`<td class="dn">${esc(i.wc)}</td>`:''}
       <td class="dn">${esc(i.name)}${i.variants.size>1?` <span class="muted" title="${esc([...i.variants].join(' | '))}">(+${i.variants.size-1})</span>`:''}</td><td><b>${r2(i.qty)}</b></td><td>${i.ent?r2(i.ent.q):0}</td><td>${r2(i.rem)}</td><td>${i.status==='done'?'✔ تم إقفاله':i.status==='partial'?`⚠ كمية جديدة +${r2(i.rem)}`:'غير مُقفل'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">(بعد ماعرضتش — زوّد عدد الصفوف)</p>';
-    h+=CL.group==='flat'?body:`<details class="chk ${done===g.all.length?'ok':'info'}" data-gk="${esc(key2)}" ${open?'open':''}><summary><b>${esc(g.label)}</b> — ${g.all.length} بند — ✔ ${done}/${g.all.length} <button class="mini" data-gm="${gi}">تحديد المجموعة</button></summary>${body}</details>`;});
+    h+=CL.group==='flat'?body:`<details class="chk ${done===g.all.length?'ok':'info'}" data-gk="${esc(key2)}" ${open?'open':''}><summary><b>${esc(g.label)}</b>${CL.group==='prod'?` — يدخل على <b>${(pwc.get(k)||new Map()).size}</b> مركز عمل`:''} — ${g.all.length} بند — ✔ ${done}/${g.all.length} <button class="mini" data-gm="${gi}">تحديد المجموعة</button></summary>${CL.group==='prod'?`<p class="muted">مراكز العمل: ${[...(pwc.get(k)||new Map()).values()].sort().map(esc).join(' ، ')}</p>`:''}${body}</details>`;});
   $('#clist').innerHTML=(h||'<p class="muted">لا يوجد بنود بالفلاتر دي</p>')+(more?`<div class="row"><span class="muted">عُرضت ${n} من ${shown.length}</span><button id="cmore" class="pri">عرض ${Math.min(CL.limit,more)} كمان</button></div>`:'');
   CL.groups=gl.map(([k,g])=>g.all);
   $$('#clist [data-i]').forEach(cb=>{const it=CL.all[+cb.dataset.i];if(it.status==='partial')cb.indeterminate=true;cb.onchange=()=>{setClosed([it],cb.checked);drawClose();toast(cb.checked?`✔ تم إقفاله: ${iso(it.day)} — ${it.wc} — ${it.name} (${r2(it.qty)})`:`تمت إزالة العلامة: ${it.name}`);};});
