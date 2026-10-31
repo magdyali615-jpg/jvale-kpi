@@ -35,6 +35,12 @@ details.chk{border:1px solid var(--line);border-radius:10px;padding:8px 14px;mar
 .stg-h{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:8px;color:var(--pri)}.stg-h>span:last-child{font-size:12px;color:var(--mut)}.stn{display:inline-block;font-size:11px;color:#fff;background:var(--acc);border-radius:10px;padding:0 8px;margin-inline-end:6px}
 .arr{align-self:center;color:var(--acc);font-size:18px;flex:0 0 auto}.wci{border-top:1px dashed var(--line);padding:6px 0}.stg-h+.wci{border-top:0}.wcn{font-weight:700}.wcm{font-size:12px;color:var(--mut)}.wcv{font-size:12px;color:var(--warn);margin-top:2px}
 .kt thead th[rowspan]{z-index:2}
+.rk{display:flex;flex-direction:column;gap:6px;margin:6px 0 16px}.rkr{display:grid;grid-template-columns:minmax(180px,260px) 1fr 80px 50px;gap:10px;align-items:center}.rkn{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar2{display:flex;height:12px;border-radius:6px;background:var(--soft);overflow:hidden;border:1px solid var(--line)}.bar2 i{display:block;height:100%}.sg1{background:var(--bad)}.sg2{background:#e0a03a}
+.lg{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-inline:3px 2px;border:1px solid var(--line)}.lg.r{background:var(--bad)}.lg.a{background:#e0a03a}.lg.au{background:repeating-linear-gradient(45deg,rgba(179,38,30,.5) 0 3px,transparent 3px 6px)}
+.dtm td.dtc{min-width:36px;padding:5px 4px;font-size:12px}.dtm td.na,.dtm td.z{color:var(--mut);opacity:.55}.dtm td.au{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.28) 0 3px,transparent 3px 6px)}.dtm th.we{background:#4a6985}
+.dtm th:first-child,.dtm td:first-child{position:sticky;inset-inline-start:0;z-index:3;background:var(--card);min-width:150px}.dtm th:first-child{background:var(--pri);z-index:4}.dtm tr.subr td:first-child,.dtm tr.tot td:first-child{background:var(--soft)}
+@media(max-width:700px){.rkr{grid-template-columns:1fr 1fr}.rkn{grid-column:1/3}}
 </style></head><body>
 <header><h1><span class="brand">Jvale</span><span class="sep">|</span>قسم الإنتاج<small>منظومة متابعة مؤشرات الأداء الصناعي (OEE)</small></h1><label class="btn">فتح ملف<input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv,.json" hidden></label><button id="xr" title="تصدير تقرير Excel بنفس تنسيق الشيتات للإرسال">تصدير تقرير Excel</button><span id="savest" class="pill ok"></span><button id="bk" title="حفظ في ملف على جهازك (يُحدَّد المكان مرة واحدة ثم يتم الحفظ تلقائيًا)">حفظ الآن</button><button id="rs">استعادة الإعدادات الأولية</button></header>
 <div id="tabs"></div><main id="view"></main><div id="toasts"></div>
@@ -224,6 +230,82 @@ function bindLog(){const draw=()=>{const rows=logRows();let h=`<div class="tw"><
   ['#fd','#ff','#ft'].forEach(s=>$(s).onchange=draw);draw();bindCopy($('#view'),logRows,true);
   $('#xl').onclick=()=>{const rows=logRows();const hd=['التاريخ','القسم','حجم الإنتاج الفعلي','الطاقة القصوى','استغلال الطاقة %','الزمن المثالي','زمن التشغيل','الأداء %','زمن التشغيل','الزمن المخطط','التوافر %'];
     const aoa=[hd].concat(rows.map(r=>[iso(r.day),r.dept,r.qty,r.cap,r.u,r.ideal,r.run,r.p,r.run2,r.plan,r.a]));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'KPI Daily Log');saveXlsx(wb,'KPI_Daily_Log.xlsx');};}
+/* ---------- downtime hours per machine: daily matrix + monthly totals, measured against the shift ---------- */
+const DT={from:null,to:null,dept:'',q:'',unit:'h',reason:'all',sort:'stop',hz:false,top:10};
+const WDL=['ح','ن','ث','ر','خ','ج','س'],d1=v=>(Math.round(v*10)/10).toLocaleString('en-US',{maximumFractionDigits:1}),d2=v=>(Math.round(v*100)/100).toLocaleString('en-US',{maximumFractionDigits:2});
+function dtInit(){if(DT.from==null||DT.to==null){DT.from=S.settings.monthStart;DT.to=R.validDays.length?R.validDays[R.validDays.length-1]:R.eom;}}
+function dtCalc(){dtInit();const sm=new Map();
+  for(const r of S.data){if((r.x&&r.x.draft)||!isStop(r))continue;const k=K.norm(r.wc)+'|'+r.day;sm.set(k,(sm.get(k)||0)+(+r.hrs||0));}
+  const qn=K.norm(DT.q),mm=new Map(),dset=new Set();
+  for(const r of R.recs){if(r.excluded||!(r.plan>0)||r.day<DT.from||r.day>DT.to)continue;if(DT.dept&&r.dept!==DT.dept)continue;if(qn&&!K.norm(r.wc).includes(qn))continue;
+    const n=K.norm(r.wc);let m=mm.get(n);if(!m){m={wc:r.wc,dept:r.dept||'غير مُسند',days:new Map(),plan:0,v:0,stop:0,rec:0,oth:0,nd:0,nstop:0,worst:null};mm.set(n,m);}
+    const stop=Math.max(0,r.plan-r.run),rec=Math.min((sm.get(n+'|'+r.day)||0)*60,stop),oth=stop-rec,v=DT.reason==='rec'?rec:DT.reason==='oth'?oth:stop;
+    m.days.set(r.day,{plan:r.plan,stop,rec,oth,v,auto:r.auto});m.plan+=r.plan;m.v+=v;m.stop+=stop;m.rec+=rec;m.oth+=oth;m.nd++;if(v>0.01)m.nstop++;if(!m.worst||v>m.worst.v)m.worst={d:r.day,v};dset.add(r.day);}
+  let ms=[...mm.values()];const all=ms.length;if(DT.hz)ms=ms.filter(m=>m.v>0.01);
+  const so=d=>{const i=S.depts.indexOf(d);return i<0?99:i;};
+  ms.sort(DT.sort==='name'?(a,b)=>a.wc.localeCompare(b.wc):DT.sort==='dept'?(a,b)=>so(a.dept)-so(b.dept)||b.v-a.v||a.wc.localeCompare(b.wc):(a,b)=>b.v-a.v||a.wc.localeCompare(b.wc));
+  const days=[...dset].sort((a,b)=>a-b),dtot=new Map();ms.forEach(m=>m.days.forEach((c,d)=>dtot.set(d,(dtot.get(d)||0)+c.v)));
+  const sum=k=>ms.reduce((s,m)=>s+m[k],0);
+  return {ms,all,days,dtot,plan:sum('plan'),v:sum('v'),rec:sum('rec'),oth:sum('oth'),shift:+S.settings.shift||480};}
+function viewDT(){dtInit();return `<div class="card hotc"><h3>ساعات التوقف لكل ماكينة — يوم بيوم وإجمالي الشهر (مقارنة بالوردية)</h3>
+  <div class="row"><label>من</label><input type="date" id="dtf" value="${iso(DT.from)}"><label>إلى</label><input type="date" id="dtt" value="${iso(DT.to)}"><button id="dtm">الشهر كله</button><button id="dtd">اليوم المختار</button>
+   <label>القسم</label><select id="dtdp"><option value="">كل الأقسام</option>${S.depts.map(d=>`<option>${esc(d)}</option>`).join('')}</select><input id="dtq" placeholder="🔍 بحث بالماكينة" style="width:170px" value="${esc(DT.q)}"></div>
+  <div class="row"><label>الخلايا بـ</label><select id="dtu"><option value="h">ساعات</option><option value="m">دقائق</option><option value="p">% من الوردية</option></select><label>مصدر التوقف</label><select id="dtr"><option value="all">كل التوقف</option><option value="rec">المسجّل في Data بس (صفوف توقف)</option><option value="oth">غير المسجّل (فرق الوردية + التوقف التلقائي)</option></select>
+   <label>ترتيب الماكينات</label><select id="dts"><option value="stop">الأكتر توقفًا</option><option value="dept">حسب القسم</option><option value="name">الاسم</option></select><label>أكبر</label><select id="dtn"><option>5</option><option>10</option><option>20</option><option value="999">الكل</option></select><label><input type="checkbox" id="dthz"> إخفاء اللي مفيش عليها توقف</label>
+   <button id="dtcp">نسخ الجدول</button><button id="dtxl">تصدير Excel</button></div>
+  <p class="muted">التوقف = الزمن المخطط − زمن التشغيل (نفس حساب التوافر في البرنامج). الزمن المخطط هو الوردية (${d2((+S.settings.shift||480)/60)} ساعة) أو ساعات التسجيل لو أكتر. «مسجّل» = صفوف التوقف في Data، و«غير مسجّل» = فرق الوردية عن الساعات المسجلة + الماكينة اللي ما اتسجلتش في يوم شغل (توقف تلقائي).</p><div id="dtout"></div></div>`;}
+function drawDT(){const C=dtCalc(),o=$('#dtout');
+  if(!C.all){o.innerHTML='<div class="hs warn">لا يوجد بيانات توقف في الفترة والفلاتر دي — راجع الفترة أو القسم، أو أن مراكز العمل مسجلة في تبويب «مراكز العمل»</div>';DT.last=null;return;}
+  const {ms,days,dtot,shift}=C,u=DT.unit,hrs=m=>m/60;
+  const cellTxt=(v,plan)=>u==='h'?d1(v/60):u==='m'?String(Math.round(v)):d1(plan?v/plan*100:0)+'%';
+  const totTxt=(v,plan)=>u==='h'?d2(v/60):u==='m'?String(Math.round(v)):d1(plan?v/plan*100:0)+'%';
+  const worstM=ms.slice().sort((a,b)=>b.v-a.v)[0],worstD=[...dtot.entries()].sort((a,b)=>b[1]-a[1])[0],aff=ms.filter(m=>m.nstop).length;
+  const tile=(n,l,sub)=>`<div class="tile"><b>${n}</b><span>${l}</span>${sub?`<span class="muted"> ${sub}</span>`:''}</div>`;
+  const tiles=`<div class="trk-sum">${tile(d2(hrs(C.v)),'ساعة توقف إجمالًا')}${tile(d1(C.plan?C.v/C.plan*100:0)+'%','من الزمن المخطط')}${tile(d1(C.v/shift),'وردية ضايعة','(الوردية '+d2(shift/60)+' س)')}${tile(aff+' / '+C.all,'ماكينات فيها توقف')}${tile(worstM&&worstM.v>0?esc(worstM.wc):'—','أكتر ماكينة توقفًا',worstM&&worstM.v>0?d2(hrs(worstM.v))+' س':'')}${tile(worstD&&worstD[1]>0?iso(worstD[0]).slice(5):'—','أسوأ يوم',worstD&&worstD[1]>0?d2(hrs(worstD[1]))+' س':'')}</div>`;
+  /* ranking bars */
+  const top=ms.slice().sort((a,b)=>b.v-a.v).filter(m=>m.v>0.01).slice(0,+DT.top),mx=Math.max(1,...top.map(m=>m.v));
+  const seg=m=>DT.reason==='rec'?[m.rec,0]:DT.reason==='oth'?[0,m.oth]:[m.rec,m.oth];
+  const bars=top.length?`<h4>ترتيب الماكينات حسب ساعات التوقف <span class="muted"><span class="lg r"></span> مسجّل في Data <span class="lg a"></span> غير مسجّل / تلقائي</span></h4><div class="rk">${top.map((m,i)=>{const [a,b]=seg(m);return `<div class="rkr"><span class="rkn">${i+1}. ${esc(m.wc)} <small class="muted">${esc(m.dept)}</small></span><span class="bar2"><i class="sg1" style="width:${a/mx*100}%"></i><i class="sg2" style="width:${b/mx*100}%"></i></span><b>${d2(hrs(m.v))} س</b><small class="muted">${d1(m.plan?m.v/m.plan*100:0)}%</small></div>`;}).join('')}</div>`:'<div class="hs ok">✔ لا يوجد توقف في الفترة دي</div>';
+  /* monthly summary per machine */
+  const hd=['#','الماكينة','القسم','أيام مخططة','أيام فيها توقف','ساعات مخططة','ساعات التوقف','% من المخطط','وردية ضايعة','متوسط توقف/يوم (س)','مسجّل في Data (س)','غير مسجّل / تلقائي (س)','التوافر %','أسوأ يوم'];
+  const sRow=(m,i)=>[i,m.wc,m.dept,m.nd,m.nstop,d2(hrs(m.plan)),d2(hrs(m.v)),d1(m.plan?m.v/m.plan*100:0)+'%',d1(m.v/shift),d2(m.nd?hrs(m.v)/m.nd:0),d2(hrs(m.rec)),d2(hrs(m.oth)),d1(m.plan?(m.plan-m.stop)/m.plan*100:0)+'%',m.worst&&m.worst.v>0?iso(m.worst.d).slice(5)+' ('+d2(hrs(m.worst.v))+' س)':'—'];
+  const grp=DT.sort==='dept';const sb=[];let cur=null,agg=null;
+  const flush=()=>{if(agg)sb.push({t:'s',c:['','إجمالي '+cur,'',agg.nd,agg.ns,d2(hrs(agg.plan)),d2(hrs(agg.v)),d1(agg.plan?agg.v/agg.plan*100:0)+'%',d1(agg.v/shift),'',d2(hrs(agg.rec)),d2(hrs(agg.oth)),d1(agg.plan?(agg.plan-agg.stop)/agg.plan*100:0)+'%','']});};
+  ms.forEach((m,i)=>{if(grp&&m.dept!==cur){flush();cur=m.dept;agg={nd:0,ns:0,plan:0,v:0,rec:0,oth:0,stop:0};}
+    if(grp){agg.nd+=m.nd;agg.ns+=m.nstop;agg.plan+=m.plan;agg.v+=m.v;agg.rec+=m.rec;agg.oth+=m.oth;agg.stop+=m.stop;}sb.push({t:'r',c:sRow(m,i+1),v:m.v/(m.plan||1)});});
+  if(grp)flush();
+  const tstop=ms.reduce((s,m)=>s+m.stop,0);
+  sb.push({t:'t',c:['','الإجمالي','',ms.reduce((s,m)=>s+m.nd,0),ms.reduce((s,m)=>s+m.nstop,0),d2(hrs(C.plan)),d2(hrs(C.v)),d1(C.plan?C.v/C.plan*100:0)+'%',d1(C.v/shift),'',d2(hrs(C.rec)),d2(hrs(C.oth)),d1(C.plan?(C.plan-tstop)/C.plan*100:0)+'%','']});
+  const heat=x=>x>0.02?`style="background:rgba(179,38,30,${Math.min(.2+x*.55,.7).toFixed(2)})"`:'';
+  const sumHtml=`<h4>إجمالي الشهر لكل ماكينة</h4><div class="tw"><table class="kt"><thead><tr>${hd.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${sb.map(o=>`<tr class="${o.t==='s'?'subr':o.t==='t'?'tot':''}">${o.c.map((v,i)=>`<td class="${i===1?'dn':''}" ${i===7&&o.t==='r'?heat(o.v):''}>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  /* daily matrix */
+  const mh=['الماكينة','القسم'].concat(days.map(d=>iso(d).slice(8)),['الإجمالي']);
+  const cellOf=(m,d)=>{const c=m.days.get(d);return c?c:null;};
+  const mrows=[];let cur2=null;
+  const dsub=(label,list)=>({t:'s',c:[label,''].concat(days.map(d=>{let s=0,p=0;list.forEach(m=>{const c=m.days.get(d);if(c){s+=c.v;p+=c.plan;}});return p?cellTxt(s,p):'';}),[totTxt(list.reduce((s,m)=>s+m.v,0),list.reduce((s,m)=>s+m.plan,0))])});
+  ms.forEach((m,i)=>{if(grp&&m.dept!==cur2){if(cur2!==null)mrows.push(dsub('إجمالي '+cur2,ms.filter(x=>x.dept===cur2)));cur2=m.dept;}
+    mrows.push({t:'r',m,c:[m.wc,m.dept].concat(days.map(d=>{const c=cellOf(m,d);return c?cellTxt(c.v,c.plan):'';}),[totTxt(m.v,m.plan)])});});
+  if(grp&&cur2!==null)mrows.push(dsub('إجمالي '+cur2,ms.filter(x=>x.dept===cur2)));
+  mrows.push({t:'t',c:['الإجمالي',''].concat(days.map(d=>{let s=0,p=0;ms.forEach(m=>{const c=m.days.get(d);if(c){s+=c.v;p+=c.plan;}});return p?cellTxt(s,p):'';}),[totTxt(C.v,C.plan)])});
+  const thDay=d=>{const w=K.serToDate(d).getUTCDay();return `<th class="${w===5||w===6?'we':''}">${+iso(d).slice(8)}<br><small>${WDL[w]}</small></th>`;};
+  const mat=`<h4>يوم بيوم <span class="muted">(${u==='h'?'ساعات توقف':u==='m'?'دقائق توقف':'% من الوردية'} — اللون الأحمر أغمق = توقف أكتر من الوردية — الخلية المخططة <span class="lg au"></span> = توقف تلقائي (مش مسجّلة في Data))</span></h4>
+   <div class="tw dtm"><table class="kt"><thead><tr><th>الماكينة</th><th>القسم</th>${days.map(thDay).join('')}<th>الإجمالي</th></tr></thead><tbody>${mrows.map(o=>`<tr class="${o.t==='s'?'subr':o.t==='t'?'tot':''}">${o.c.map((v,i)=>{if(i<2||i===o.c.length-1)return `<td class="${i===0?'dn':''}">${esc(v)}</td>`;
+      if(o.t!=='r')return `<td class="dtc">${esc(v)}</td>`;const c=o.m.days.get(days[i-2]);if(!c)return '<td class="dtc na">·</td>';
+      const x=c.plan?c.v/c.plan:0;return `<td class="dtc ${c.auto?'au':''} ${c.v>0.01?'':'z'}" ${heat(x)} title="${esc(iso(days[i-2])+' — '+o.m.wc+': توقف '+d2(c.stop/60)+' س من '+d2(c.plan/60)+' س (مسجّل '+d2(c.rec/60)+' + غير مسجّل '+d2(c.oth/60)+')'+(c.auto?' — توقف تلقائي':''))}">${esc(v)}</td>`;}).join('')}</tr>`).join('')}</tbody></table></div>`;
+  o.innerHTML=tiles+bars+sumHtml+mat;
+  const mhh=['الماكينة','القسم'].concat(days.map(d=>iso(d)),['الإجمالي']);
+  DT.last={sh:[hd,sb.map(x=>x.c)],mat:[mhh,mrows.map(r=>r.c)]};}
+function bindDT(){const rr=()=>drawDT();
+  $('#dtf').onchange=e=>{DT.from=isoToSer(e.target.value)||DT.from;rr();};$('#dtt').onchange=e=>{DT.to=isoToSer(e.target.value)||DT.to;rr();};
+  $('#dtm').onclick=()=>{DT.from=S.settings.monthStart;DT.to=R.validDays.length?R.validDays[R.validDays.length-1]:R.eom;$('#dtf').value=iso(DT.from);$('#dtt').value=iso(DT.to);rr();};
+  $('#dtd').onclick=()=>{const d=S.settings.selDay;if(d==null)return;DT.from=DT.to=d;$('#dtf').value=$('#dtt').value=iso(d);rr();};
+  $('#dtdp').value=DT.dept;$('#dtdp').onchange=e=>{DT.dept=e.target.value;rr();};$('#dtq').oninput=e=>{DT.q=e.target.value;rr();};
+  $('#dtu').value=DT.unit;$('#dtu').onchange=e=>{DT.unit=e.target.value;rr();};$('#dtr').value=DT.reason;$('#dtr').onchange=e=>{DT.reason=e.target.value;rr();};
+  $('#dts').value=DT.sort;$('#dts').onchange=e=>{DT.sort=e.target.value;rr();};$('#dtn').value=String(DT.top);$('#dtn').onchange=e=>{DT.top=+e.target.value;rr();};
+  $('#dthz').checked=DT.hz;$('#dthz').onchange=e=>{DT.hz=e.target.checked;rr();};
+  $('#dtcp').onclick=()=>{if(!DT.last)return;copy([DT.last.mat[0]].concat(DT.last.mat[1]).map(r=>r.join('\t')).join('\n'),'جدول التوقف');};
+  $('#dtxl').onclick=()=>{if(!DT.last)return toast('لا يوجد بيانات','warn');const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([DT.last.sh[0]].concat(DT.last.sh[1])),'إجمالي الشهر');XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([DT.last.mat[0]].concat(DT.last.mat[1])),'يوم بيوم');saveXlsx(wb,'Downtime_Hours.xlsx');};
+  drawDT();}
 function viewStops(){
   const m0=S.settings.monthStart, m1=R.eom, list=R.autoList.slice().sort((a,b)=>a.day-b.day);
   const per=S.depts.map(d=>{const l=list.filter(r=>r.dept===d);return {d,n:l.length,min:l.reduce((s,r)=>s+r.plan,0)};});
@@ -811,7 +893,7 @@ async function cloudInit(){const db=await claude.use('db');if(!db){CLOUD.status=
   const err=e=>{if(e&&e.code==='revoked'){CLOUD.canWrite=false;toast('🔒 سُحبت صلاحية الوصول','warn');}else{CLOUD.status='err';pill();}};
   db.collection('rows').onSnapshot(onRows,err);db.doc('cfg/main').onSnapshot(onCfg,err);db.doc('cfg/closed').onSnapshot(onClosed,err);pill();}
 
-const TABS=[['entry','تسجيل البيانات',viewEntry,bindEntry],['kpi','مؤشرات الأداء',viewKpi,bindKpi],['log','السجل اليومي',viewLog,bindLog],['tot','إجماليات مراكز العمل',viewTot,bindTot],['close','إقفال الأصناف',viewClose,bindClose],['stops','التوقفات المفترضة',viewStops,bindStops],['map','مراكز العمل',viewMap,bindMap],['set','الاستبعاد والإعدادات',viewSettings,bindSettings],['data','البيانات',viewData,bindData],['guide','دليل الاستخدام',viewGuide,()=>{}]];
+const TABS=[['entry','تسجيل البيانات',viewEntry,bindEntry],['kpi','مؤشرات الأداء',viewKpi,bindKpi],['log','السجل اليومي',viewLog,bindLog],['tot','إجماليات مراكز العمل',viewTot,bindTot],['close','إقفال الأصناف',viewClose,bindClose],['dt','ساعات التوقف',viewDT,bindDT],['stops','التوقفات المفترضة',viewStops,bindStops],['map','مراكز العمل',viewMap,bindMap],['set','الاستبعاد والإعدادات',viewSettings,bindSettings],['data','البيانات',viewData,bindData],['guide','دليل الاستخدام',viewGuide,()=>{}]];
 
 /* ================= GitHub Pages mode: data.json in the repo, token typed once and kept in this browser only ================= */
 let ghDirty=false,ghBusy=false;const GHDK=KEY+'_ghdirty';try{ghDirty=!!GHC&&localStorage.getItem(GHDK)==='1';}catch(e){}
