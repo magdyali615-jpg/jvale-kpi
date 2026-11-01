@@ -135,6 +135,9 @@ details.chk{border-radius:12px}details.chk>summary{padding:10px 14px}
 .tab[data-t=guide]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M4%204h6a3%203%200%200%201%203%203v13a2%202%200%200%200-2-2H4zM20%204h-6a3%203%200%200%200-3%203v13a2%202%200%200%201%202-2h7z'/%3E%3C/svg%3E")}
 .cdlg{max-width:560px;width:94%}.cdlg h3{margin-bottom:6px}.cdlg textarea{margin-top:6px;min-height:64px}.seg{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}.seg .opt{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;cursor:pointer;background:var(--soft);font-weight:500}.seg .opt:has(input:checked){border-color:var(--acc);background:rgba(28,111,181,.12);color:var(--pri)}
 td.rsn{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:start;font-size:12.5px;color:var(--warn)}
+.pl{display:inline-block;padding:2px 12px;border-radius:8px;font-size:12px;font-weight:700;border:1px solid transparent}.pl.g{background:rgba(21,128,61,.14);color:var(--good);border-color:rgba(21,128,61,.35)}.pl.b{background:rgba(28,111,181,.14);color:#1c6fb5;border-color:rgba(28,111,181,.35)}.pl.y{background:rgba(202,138,4,.16);color:#a16207;border-color:rgba(202,138,4,.4)}.pl.r{background:rgba(180,35,24,.14);color:var(--bad);border-color:rgba(180,35,24,.35)}.pl.n{background:var(--soft);color:var(--mut)}
+.vg{color:var(--good);font-weight:700}.vb{color:#1c6fb5;font-weight:700}.vy{color:#a16207;font-weight:700}.vr{color:var(--bad);font-weight:700}.vn{color:var(--mut)}@media(prefers-color-scheme:dark){.vb{color:#6bb4ee}.vy{color:#e0a03a}}
+.mv{font-size:20px}.fm{text-align:start;font-size:12.5px;line-height:1.7;max-width:330px}tr.dprow{cursor:pointer}tr.dprow .ar{display:inline-block;width:14px;color:var(--mut)}td.wcn2{padding-inline-start:34px;text-align:start;font-weight:500}.kt td.dn{text-align:start}
 </style></head><body>
 <header><h1><span class="brand">Jvale</span><span class="sep">|</span>قسم الإنتاج<small>منظومة متابعة مؤشرات الأداء الصناعي (OEE)</small></h1><label class="btn">فتح ملف<input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv,.json" hidden></label><button id="xr" title="تصدير تقرير Excel بنفس تنسيق الشيتات للإرسال">تصدير تقرير Excel</button><span id="savest" class="pill ok"></span><button id="bk" title="حفظ في ملف على جهازك (يُحدَّد المكان مرة واحدة ثم يتم الحفظ تلقائيًا)">حفظ الآن</button><button id="rs">استعادة الإعدادات الأولية</button></header>
 <div id="tabs"></div><main id="view"></main><div id="toasts"></div>
@@ -298,12 +301,12 @@ function viewKpi(){
    <div class="hs ${hs.length?'warn':'ok'}">${hs.length?hs.map(esc).join('<br>'):'✔ سليم — كل الأسماء مربوطة والفحوصات سليمة'}</div></div>`;
   if(d==null) return h+'<div class="card">لا يوجد بيانات في الشهر ده. افتح تبويب "البيانات" واستورد ملف.</div>';
   h+=viewDash(d);h+=`<div class="card"><h3>① بيانات اليوم المختار — ${LT(iso(d))} (انسخها في جدول الإدخال اليومي)</h3>${copyBar()}${kpiTable(R.dayTable(d),'t1')}</div>`;
-  h+=`<div class="card"><h3>② تراكمي الشهر (المجموع ÷ المجموع، مش متوسط النسب)</h3><div class="bar"><button data-cpm="all">نسخ الجدول</button></div>${kpiTable(R.monthTable(),'t2')}</div>`;
+  h+=viewMonth();h+=`<details class="card"><summary><b>تراكمي الشهر بطريقة الإكسل (المجموع ÷ المجموع) — للمرجع</b></summary><div class="bar"><button data-cpm="all">نسخ الجدول</button></div>${kpiTable(R.monthTable(),'t2')}</details>`;
   const ex=R.exList.filter(r=>r.day===d), au=R.autoList.filter(r=>r.day===d);
   h+=`<div class="grid2"><div class="card"><h3>ماكينات ليها بيانات اليوم واستُبعدت (${ex.length})</h3>${ex.length?`<ul class="lst">${ex.map(r=>`<li><b>${esc(r.wc)}</b> <span class="muted">${esc(r.dept)} — ${esc(r.reason)}</span></li>`).join('')}</ul>`:'<p class="muted">لا يوجد</p>'}</div>
    <div class="card"><h3>④ ماكينات غير مسجلة في Data اليوم — احتُسبت متوقفة (${au.length})</h3>${au.length?`<ul class="lst">${au.map(r=>`<li><b>${esc(r.wc)}</b> <span class="muted">${esc(r.dept)} — ${fn(r.plan)} دقيقة مخططة، تشغيل 0</span></li>`).join('')}</ul>`:'<p class="muted">لا يوجد</p>'}</div></div>`;
   return h;}
-function bindKpi(){if(S.settings.selDay!=null)bindDash();
+function bindKpi(){if(S.settings.selDay!=null)bindDash();bindMonth();
   $('#selDay').onchange=e=>{S.settings.selDay=+e.target.value;save();render();};
   $('#prev').onclick=()=>{const i=R.validDays.indexOf(S.settings.selDay);if(i>0){S.settings.selDay=R.validDays[i-1];save();render();}};
   $('#next').onclick=()=>{const i=R.validDays.indexOf(S.settings.selDay);if(i<R.validDays.length-1){S.settings.selDay=R.validDays[i+1];save();render();}};
@@ -311,6 +314,39 @@ function bindKpi(){if(S.settings.selDay!=null)bindDash();
   $('#shift').onchange=e=>{const v=+e.target.value;if(v>0){S.settings.shift=v;save();render();}};
   if(S.settings.selDay!=null){bindCopy($('#view'),()=>R.dayTable(S.settings.selDay),false);
     const bm=$('[data-cpm]');if(bm)bm.onclick=()=>copy(tsvRows(R.monthTable(),KP.all),'تراكمي الشهر');}}
+/* ---------- Monthly KPIs: factory total / department / work center (same method as the management portal) ---------- */
+const MT={method:'avg',col:new Set()};
+const mtMean=a=>{a=a.filter(v=>v!=null);return a.length?a.reduce((s,v)=>s+v,0)/a.length:null;};
+const mtSt=v=>v==null?['—','n']:v>=.9?['ممتاز','g']:v>=.8?['جيد','b']:v>=.6?['مقبول','y']:['ضعيف','r'];
+function mtCalc(method){const mt=R.monthTable(),avg=method==='avg';
+  const dl=new Map();R.log.forEach(r=>{let a=dl.get(r.dept);if(!a)dl.set(r.dept,a=[]);a.push(r);});
+  const wm=new Map();R.recs.forEach(r=>{if(r.excluded||!(r.plan>0))return;const k=r.dept+'\u0001'+K.norm(r.wc);let w=wm.get(k);if(!w)wm.set(k,w={wc:r.wc,dept:r.dept,rs:[]});w.rs.push(r);});
+  const depts=mt.map(m=>{const rows=(dl.get(m.dept)||[]).filter(x=>x.plan>0);
+    const v=avg?{u:mtMean(rows.map(x=>x.u)),p:mtMean(rows.map(x=>x.p)),a:mtMean(rows.map(x=>x.a))}:{u:m.u,p:m.p,a:m.a};
+    const wcs=[...wm.values()].filter(w=>w.dept===m.dept).map(w=>{const t=dbAgg(w.rs),x=avg?{u:mtMean(w.rs.map(r=>r.cap?r.qty/r.cap:null)),p:mtMean(w.rs.map(r=>r.run?r.ideal/r.run:null)),a:mtMean(w.rs.map(r=>r.plan?r.run/r.plan:null))}:{u:t.u,p:t.p,a:t.a};return Object.assign({wc:w.wc,n:w.rs.length},x);}).sort((a,b)=>a.wc.localeCompare(b.wc));
+    return Object.assign({dept:m.dept,n:rows.length,wcs},v);});
+  const live=depts.filter(d=>d.u!=null||d.p!=null||d.a!=null);let plant;
+  if(avg){const f=k=>{const a=depts.map(d=>d[k]).filter(v=>v!=null);return [mtMean(a),a.length];};const [u,nu]=f('u'),[p,np]=f('p'),[a,na]=f('a');plant={u,p,a,nu,np,na,n:live.length};}
+  else{const t=dbAgg(mt);plant={u:t.u,p:t.p,a:t.a,nu:live.length,np:live.length,na:live.length,n:live.length};}
+  return {avg,depts,plant,per:iso(S.settings.monthStart).slice(0,7),note:avg?'قيمة كل مركز عمل وكل قسم = متوسط قيمه اليومية في أيام الشهر اللي ليها بيانات، وإجمالي المصنع = متوسط قيم الأقسام (كل قسم بنفس الوزن، من غير ترجيح بالكمية أو الزمن).':'قيمة كل مركز عمل وكل قسم وإجمالي المصنع = مجموع البسط ÷ مجموع المقام لكل الشهر (طريقة الإكسل).'};}
+function viewMonth(){if(!R.validDays.length)return '';return `<div class="card hotc"><h3>② مؤشرات الشهر — إجمالي المصنع وكل قسم وكل مركز عمل</h3>
+  <div class="row"><label>طريقة الحساب</label><select id="mtm"><option value="avg">زي بوابة الإدارة: متوسط الأيام ← متوسط الأقسام</option><option value="ratio">مجموع ÷ مجموع (زي الإكسل)</option></select><button id="mtc1" type="button">نسخ إجمالي المصنع</button><button id="mtc2" type="button">نسخ الأقسام</button><button id="mtc3" type="button">نسخ كل مراكز العمل</button><button id="mtfo" type="button">طيّ الأقسام</button><button id="mtun" type="button">فتح الأقسام</button></div>
+  <p class="muted" id="mtnote"></p><div id="mtbox"></div></div>`;}
+function drawMonth(){const box=$('#mtbox');if(!box)return;const C=mtCalc(MT.method),pc1=v=>v==null?'':(Math.round(v*1000)/10).toFixed(1);$('#mtnote').textContent=C.note;
+  const IND=[['u','استغلال الطاقة الإنتاجية للأقسام الإنتاجية',.85,'حجم الإنتاج الفعلي','الطاقة الإنتاجية القصوى'],['p','الأداء في OEE للأقسام الإنتاجية',1,'الزمن المثالي للإنتاج الفعلي (دقيقة)','زمن التشغيل الفعلي (دقيقة)'],['a','التوافر في OEE للأقسام الإنتاجية',1,'زمن التشغيل الفعلي (دقيقة)','زمن الإنتاج المخطط (دقيقة)']];
+  const pill=v=>{const [t,c]=mtSt(v);return `<span class="pl ${c}">${t}</span>`;};
+  const plant=`<div class="tw"><table class="kt"><thead><tr><th>المؤشر</th><th>الفترة</th><th>المستهدف</th><th>إجمالي المصنع</th><th>الحالة</th><th>البسط والمقام</th></tr></thead><tbody>${IND.map(([k,t,tg,nu,de])=>{const v=C.plant[k],n=C.plant['n'+k];return `<tr><td class="dn">${t}</td><td>${C.per}</td><td>${Math.round(tg*100)}%</td><td><b class="mv v${mtSt(v)[1]}">${pcs(v)}</b><br><small class="muted">فترة ${C.per} — ${C.avg?`متوسط ${n} قسم`:`مجموع ÷ مجموع (${n} قسم)`}</small></td><td>${pill(v)}</td><td class="fm"><b>بسط:</b> ${nu}<br><b>مقام:</b> ${de}</td></tr>`;}).join('')}</tbody></table></div>`;
+  let rows='';C.depts.forEach((d,i)=>{const cl=MT.col.has(String(i)),c=(v)=>`<td class="v${mtSt(v)[1]}">${pcs(v)}</td>`;
+    rows+=`<tr class="subr dprow ${cl?'cl':''}" data-dp="${i}"><td class="dn"><span class="ar">${cl?'▸':'▾'}</span> ${esc(d.dept)} <span class="muted">(${d.wcs.length} مركز)</span></td><td>${d.n}</td>${c(d.u)}${c(d.p)}${c(d.a)}</tr>`;
+    d.wcs.forEach(w=>{rows+=`<tr data-pd="${i}" style="${cl?'display:none':''}"><td class="wcn2">${esc(w.wc)}</td><td>${w.n}</td>${c(w.u)}${c(w.p)}${c(w.a)}</tr>`;});});
+  box.innerHTML=`<h4>إجمالي المصنع</h4>${plant}<h4>الأقسام ومراكز العمل <span class="muted">(اضغط على القسم لطيّه أو فتحه)</span></h4><div class="tw"><table class="kt" id="mttab"><thead><tr><th>القسم / مركز العمل</th><th>أيام محسوبة</th><th>استغلال الطاقة (85%)</th><th>الأداء (100%)</th><th>التوافر (100%)</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  $$('#mttab tr[data-dp]').forEach(r=>r.onclick=()=>{const k=r.dataset.dp,cl=!MT.col.has(k);if(cl)MT.col.add(k);else MT.col.delete(k);r.classList.toggle('cl',cl);r.querySelector('.ar').textContent=cl?'▸':'▾';$$(`#mttab tr[data-pd="${k}"]`).forEach(x=>x.style.display=cl?'none':'');});
+  const cp=(id,txt)=>{$(id).onclick=()=>copy(txt(),'مؤشرات الشهر');};
+  cp('#mtc1',()=>['المؤشر\tالقيمة %\tعدد الأقسام'].concat(IND.map(([k,t])=>[t,pc1(C.plant[k]),C.plant['n'+k]].join('\t'))).join('\n'));
+  cp('#mtc2',()=>['القسم\tاستغلال الطاقة %\tالأداء %\tالتوافر %'].concat(C.depts.map(d=>[d.dept,pc1(d.u),pc1(d.p),pc1(d.a)].join('\t'))).join('\n'));
+  cp('#mtc3',()=>['القسم\tمركز العمل\tأيام\tاستغلال الطاقة %\tالأداء %\tالتوافر %'].concat(C.depts.flatMap(d=>d.wcs.map(w=>[d.dept,w.wc,w.n,pc1(w.u),pc1(w.p),pc1(w.a)].join('\t')))).join('\n'));}
+function bindMonth(){if(!$('#mtbox'))return;$('#mtm').value=MT.method;$('#mtm').onchange=e=>{MT.method=e.target.value;drawMonth();};
+  $('#mtfo').onclick=()=>{MT.col=new Set(R.monthTable().map((_,i)=>String(i)));drawMonth();};$('#mtun').onclick=()=>{MT.col=new Set();drawMonth();};drawMonth();}
 /* ---------- Dashboard (top of KPI tab): rings, month trend, department bars ---------- */
 const DB={hide:new Set()},KP3=[['u','استغلال الطاقة',.85,'#1c6fb5'],['p','الأداء',1,'#7c3aed'],['a','التوافر',1,'#0d9488']];
 const pcs=v=>v==null?'—':(Math.round(v*1000)/10).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
@@ -1015,6 +1051,9 @@ function buildReport(){const d=S.settings.selDay,sheets=[],stamp='مولّد م�
   Lg.merge(4,1,5,1,'التاريخ','hdr');Lg.merge(4,2,5,2,'القسم','hdr');[['استغلال الطاقة الإنتاجية (الهدف 85%)',3],['الأداء في OEE (الهدف 100%)',6],['التوافر في OEE (الهدف 100%)',9]].forEach(([t,c])=>Lg.merge(4,c,4,c+2,t,'hdr'));
   ['حجم الإنتاج الفعلي (كمية)','الطاقة القصوى (كمية)','%','الزمن المثالي للإنتاج الفعلي (دقيقة)','زمن التشغيل الفعلي (دقيقة)','%','زمن التشغيل الفعلي (دقيقة)','زمن الإنتاج المخطط (دقيقة)','%'].forEach((t,i)=>Lg.set(5,3+i,t,'sub'));Lg.heights[5]=48;
   R.log.forEach((x,i)=>{const rr=6+i;Lg.set(rr,1,x.day,'date').set(rr,2,x.dept,'txt');[['qty','num1'],['cap','num1'],['u','pct'],['ideal','num1'],['run','num1'],['p','pct'],['run2','num1'],['plan','num1'],['a','pct']].forEach(([k,s],j)=>Lg.set(rr,3+j,x[k]==null?'':x[k],s));});Lg.filter=`A5:K${5+R.log.length}`;sheets.push(Lg);
+  {const C=mtCalc(MT.method),M=new Sh('KPI Month (Portal)',{widths:[34,24,24,12,16,16,16],freeze:5});M.set(1,1,'KPI شهري — إجمالي المصنع والأقسام ومراكز العمل','title');M.set(2,1,stamp,'note');M.set(3,1,C.note,'note');['المستوى','القسم','Work Center','أيام محسوبة','استغلال الطاقة','الأداء','التوافر'].forEach((t,i)=>M.set(5,1+i,t,'hdr'));M.heights[5]=34;let rr=6;
+ const put=(lv,dp,wc,n,o,st)=>{M.set(rr,1,lv,st).set(rr,2,dp,st).set(rr,3,wc,st).set(rr,4,n,'num2');['u','p','a'].forEach((k,j)=>M.set(rr,5+j,o[k]==null?'':o[k],'pct'));rr++;};
+ put('إجمالي المصنع ('+(C.avg?'متوسط '+C.plant.n+' قسم':'مجموع ÷ مجموع')+')','','',C.plant.n,C.plant,'bold');C.depts.forEach(d=>{put('قسم',d.dept,'',d.n,d,'bold');d.wcs.forEach(w=>put('مركز عمل',d.dept,w.wc,w.n,w,'txt'));});sheets.push(M);}
   const St=new Sh('KPI Stop Notes',{widths:[26,16,50,22,22,58],freeze:0});St.set(1,1,'KPI Stop Notes — مركز العمل التي احتُسبت متوقفة لأنها غير مسجلة في Data','title');St.set(2,1,stamp,'note');
   ['القسم','عدد الماكينة-يوم (الشهر)','دقايق احتُسبت توقف (الشهر)'].forEach((t,i)=>St.set(4,1+i,t,'hdr'));St.heights[4]=34;const au=R.autoList.slice().sort((a,b)=>a.day-b.day);
   S.depts.forEach((dp,i)=>{const l=au.filter(x=>x.dept===dp);St.set(5+i,1,dp,'bold').set(5+i,2,l.length,'num2').set(5+i,3,l.reduce((s,x)=>s+x.plan,0),'num1');});const n0=5+S.depts.length;St.set(n0,1,'الإجمالي','tTxt').set(n0,2,au.length,'tNum').set(n0,3,au.reduce((s,x)=>s+x.plan,0),'tNum1');
