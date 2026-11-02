@@ -138,6 +138,7 @@ td.rsn{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap
 .pl{display:inline-block;padding:2px 12px;border-radius:8px;font-size:12px;font-weight:700;border:1px solid transparent}.pl.g{background:rgba(21,128,61,.14);color:var(--good);border-color:rgba(21,128,61,.35)}.pl.b{background:rgba(28,111,181,.14);color:#1c6fb5;border-color:rgba(28,111,181,.35)}.pl.y{background:rgba(202,138,4,.16);color:#a16207;border-color:rgba(202,138,4,.4)}.pl.r{background:rgba(180,35,24,.14);color:var(--bad);border-color:rgba(180,35,24,.35)}.pl.n{background:var(--soft);color:var(--mut)}
 .vg{color:var(--good);font-weight:700}.vb{color:#1c6fb5;font-weight:700}.vy{color:#a16207;font-weight:700}.vr{color:var(--bad);font-weight:700}.vn{color:var(--mut)}@media(prefers-color-scheme:dark){.vb{color:#6bb4ee}.vy{color:#e0a03a}}
 .mv{font-size:20px}.fm{text-align:start;font-size:12.5px;line-height:1.7;max-width:330px}tr.dprow{cursor:pointer}tr.dprow .ar{display:inline-block;width:14px;color:var(--mut)}td.wcn2{padding-inline-start:34px;text-align:start;font-weight:500}.kt td.dn{text-align:start}
+.dashc{margin:0 0 12px}.dashc .seg{margin:0;display:inline-flex;gap:6px}
 </style></head><body>
 <header><h1><span class="brand">Jvale</span><span class="sep">|</span>قسم الإنتاج<small>منظومة متابعة مؤشرات الأداء الصناعي (OEE)</small></h1><label class="btn">فتح ملف<input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv,.json" hidden></label><button id="xr" title="تصدير تقرير Excel بنفس تنسيق الشيتات للإرسال">تصدير تقرير Excel</button><span id="savest" class="pill ok"></span><button id="bk" title="حفظ في ملف على جهازك (يُحدَّد المكان مرة واحدة ثم يتم الحفظ تلقائيًا)">حفظ الآن</button><button id="rs">استعادة الإعدادات الأولية</button></header>
 <div id="tabs"></div><main id="view"></main><div id="toasts"></div>
@@ -195,7 +196,7 @@ function compute(S){
     const ovr=+m.ovr>0?+m.ovr:0;
     for(const d of days){
       const rows=by.get(key(w,d)); const exAny=(m.inc==='لا')||exl.some(e=>e.w===w&&e.lo<=d&&d<=e.hi);
-      let rec={wc:m.name,dept:m.dept||'',day:d,plan:0,run:0,ideal:0,qty:0,cap:0,hasRows:!!rows,excluded:false,auto:false,reason:''};
+      let rec={wc:m.name,dept:m.dept||'',day:d,plan:0,run:0,ideal:0,qty:0,cap:0,hasRows:!!rows,excluded:false,auto:false,noKpi:m.kpi==='لا',reason:''};
       if(rows){
         if(exAny){rec.excluded=true;rec.reason=(m.inc==='لا')?'مستبعد من الخريطة (لا)':'مستبعد بتاريخ (KPI Exclusions)';}
         else{
@@ -209,12 +210,12 @@ function compute(S){
       } else if(st.autoStop&&!exAny&&(dayCount.get(d)||0)>=thr&&!off.has(d)){
         rec.auto=true; rec.plan=ovr>0?ovr:st.shift;
       }
-      recs.push(rec); dayPlan.set(d,(dayPlan.get(d)||0)+rec.plan);
+      recs.push(rec); if(!rec.noKpi)dayPlan.set(d,(dayPlan.get(d)||0)+rec.plan);
     }
   }
   const validDays=days.filter(d=>(dayPlan.get(d)||0)>0);
   const agg=(filter)=>{const o={};depts.forEach(dp=>o[dp]={qty:0,cap:0,ideal:0,run:0,plan:0});
-    for(const r of recs){ if(!o[r.dept]||!filter(r)) continue; const a=o[r.dept]; a.qty+=r.qty;a.cap+=r.cap;a.ideal+=r.ideal;a.run+=r.run;a.plan+=r.plan;} return o;};
+    for(const r of recs){ if(!o[r.dept]||r.noKpi||!filter(r)) continue; const a=o[r.dept]; a.qty+=r.qty;a.cap+=r.cap;a.ideal+=r.ideal;a.run+=r.run;a.plan+=r.plan;} return o;};
   const fin=a=>{const B=round1(a.qty),C=round1(a.cap),E=round1(a.ideal),F=round1(a.run),I=round1(a.plan);
     return {qty:B,cap:C,u:C?B/C:null,ideal:E,run:F,p:F?E/F:null,run2:F,plan:I,a:I?F/I:null};};
   const dayTable=(d)=>{const o=agg(r=>r.day===d);return depts.map(dp=>Object.assign({dept:dp},fin(o[dp])));};
@@ -302,7 +303,7 @@ function viewKpi(){
   if(d==null) return h+'<div class="card">لا يوجد بيانات في الشهر ده. افتح تبويب "البيانات" واستورد ملف.</div>';
   h+=viewDash(d);h+=`<div class="card"><h3>① بيانات اليوم المختار — ${LT(iso(d))} (انسخها في جدول الإدخال اليومي)</h3>${copyBar()}${kpiTable(R.dayTable(d),'t1')}</div>`;
   h+=viewMonth();h+=`<details class="card"><summary><b>تراكمي الشهر بطريقة الإكسل (المجموع ÷ المجموع) — للمرجع</b></summary><div class="bar"><button data-cpm="all">نسخ الجدول</button></div>${kpiTable(R.monthTable(),'t2')}</details>`;
-  const ex=R.exList.filter(r=>r.day===d), au=R.autoList.filter(r=>r.day===d);
+  const ex=R.exList.filter(r=>r.day===d), au=R.autoList.filter(r=>r.day===d&&!r.noKpi);
   h+=`<div class="grid2"><div class="card"><h3>ماكينات ليها بيانات اليوم واستُبعدت (${ex.length})</h3>${ex.length?`<ul class="lst">${ex.map(r=>`<li><b>${esc(r.wc)}</b> <span class="muted">${esc(r.dept)} — ${esc(r.reason)}</span></li>`).join('')}</ul>`:'<p class="muted">لا يوجد</p>'}</div>
    <div class="card"><h3>④ ماكينات غير مسجلة في Data اليوم — احتُسبت متوقفة (${au.length})</h3>${au.length?`<ul class="lst">${au.map(r=>`<li><b>${esc(r.wc)}</b> <span class="muted">${esc(r.dept)} — ${fn(r.plan)} دقيقة مخططة، تشغيل 0</span></li>`).join('')}</ul>`:'<p class="muted">لا يوجد</p>'}</div></div>`;
   return h;}
@@ -315,53 +316,58 @@ function bindKpi(){if(S.settings.selDay!=null)bindDash();bindMonth();
   if(S.settings.selDay!=null){bindCopy($('#view'),()=>R.dayTable(S.settings.selDay),false);
     const bm=$('[data-cpm]');if(bm)bm.onclick=()=>copy(tsvRows(R.monthTable(),KP.all),'تراكمي الشهر');}}
 /* ---------- Monthly KPIs: factory total / department / work center (same method as the management portal) ---------- */
-const MT={method:'avg',col:new Set()};
+const MT={method:'avg',basis:'val',col:new Set()},TGM={u:.85,p:1,a:1};
 const mtMean=a=>{a=a.filter(v=>v!=null);return a.length?a.reduce((s,v)=>s+v,0)/a.length:null;};
-const mtSt=v=>v==null?['—','n']:v>=.9?['ممتاز','g']:v>=.8?['جيد','b']:v>=.6?['مقبول','y']:['ضعيف','r'];
-function mtCalc(method){const mt=R.monthTable(),avg=method==='avg';
+const mtSt=(v,tg)=>{if(v==null)return ['—','n'];const a=v/tg;return a>=.9?['ممتاز','g']:a>=.75?['جيد','b']:a>=.5?['مقبول','y']:['ضعيف','r'];};
+function mtCalc(method){const mt=R.monthTable(),avg=method==='avg',ach=MT.basis==='ach';
   const dl=new Map();R.log.forEach(r=>{let a=dl.get(r.dept);if(!a)dl.set(r.dept,a=[]);a.push(r);});
-  const wm=new Map();R.recs.forEach(r=>{if(r.excluded||!(r.plan>0))return;const k=r.dept+'\u0001'+K.norm(r.wc);let w=wm.get(k);if(!w)wm.set(k,w={wc:r.wc,dept:r.dept,rs:[]});w.rs.push(r);});
-  const depts=mt.map(m=>{const rows=(dl.get(m.dept)||[]).filter(x=>x.plan>0);
-    const v=avg?{u:mtMean(rows.map(x=>x.u)),p:mtMean(rows.map(x=>x.p)),a:mtMean(rows.map(x=>x.a))}:{u:m.u,p:m.p,a:m.a};
-    const wcs=[...wm.values()].filter(w=>w.dept===m.dept).map(w=>{const t=dbAgg(w.rs),x=avg?{u:mtMean(w.rs.map(r=>r.cap?r.qty/r.cap:null)),p:mtMean(w.rs.map(r=>r.run?r.ideal/r.run:null)),a:mtMean(w.rs.map(r=>r.plan?r.run/r.plan:null))}:{u:t.u,p:t.p,a:t.a};return Object.assign({wc:w.wc,n:w.rs.length},x);}).sort((a,b)=>a.wc.localeCompare(b.wc));
-    return Object.assign({dept:m.dept,n:rows.length,wcs},v);});
-  const live=depts.filter(d=>d.u!=null||d.p!=null||d.a!=null);let plant;
-  if(avg){const f=k=>{const a=depts.map(d=>d[k]).filter(v=>v!=null);return [mtMean(a),a.length];};const [u,nu]=f('u'),[p,np]=f('p'),[a,na]=f('a');plant={u,p,a,nu,np,na,n:live.length};}
-  else{const t=dbAgg(mt);plant={u:t.u,p:t.p,a:t.a,nu:live.length,np:live.length,na:live.length,n:live.length};}
-  return {avg,depts,plant,per:iso(S.settings.monthStart).slice(0,7),note:avg?'قيمة كل مركز عمل وكل قسم = متوسط قيمه اليومية في أيام الشهر اللي ليها بيانات، وإجمالي المصنع = متوسط قيم الأقسام (كل قسم بنفس الوزن، من غير ترجيح بالكمية أو الزمن).':'قيمة كل مركز عمل وكل قسم وإجمالي المصنع = مجموع البسط ÷ مجموع المقام لكل الشهر (طريقة الإكسل).'};}
+  const wm=new Map();R.recs.forEach(r=>{if(r.excluded||r.noKpi||!(r.plan>0))return;const k=r.dept+'\u0001'+K.norm(r.wc);let w=wm.get(k);if(!w)wm.set(k,w={wc:r.wc,dept:r.dept,rs:[]});w.rs.push(r);});
+  /* department month = sum of the daily (1-decimal) numerators / sum of the daily denominators — exactly what the portal does with the daily table */
+  const depts=mt.map(m=>{const rows=dl.get(m.dept)||[],t=dbAgg(rows);
+    const wcs=[...wm.values()].filter(w=>w.dept===m.dept).map(w=>{const x=dbAgg(w.rs);return {wc:w.wc,n:w.rs.length,u:x.u,p:x.p,a:x.a};}).sort((a,b)=>a.wc.localeCompare(b.wc));
+    return {dept:m.dept,n:rows.filter(x=>x.plan>0).length,u:t.u,p:t.p,a:t.a,wcs};});
+  const live=depts.filter(d=>d.u!=null||d.p!=null||d.a!=null);
+  const mk=(use)=>{if(avg){const f=k=>{const a=depts.map(d=>d[k]==null?null:(use?d[k]/TGM[k]:d[k])).filter(v=>v!=null);return [mtMean(a),a.length];};const [u,nu]=f('u'),[p,np]=f('p'),[a,na]=f('a');return {u,p,a,nu,np,na,n:live.length};}
+    const t=dbAgg(R.log);return {u:t.u,p:t.p,a:t.a,nu:live.length,np:live.length,na:live.length,n:live.length};};
+  const plantV=mk(false),plant=ach&&avg?mk(true):plantV;
+  return {avg,ach:ach&&avg,depts,plant,plantV,per:iso(S.settings.monthStart).slice(0,7),
+    note:avg?'قيمة كل قسم = مجموع الأرقام اليومية (البسط) ÷ مجموع المقامات اليومية لأيام الشهر — زي ما بتدخلها في جدول البوابة اليومي — وإجمالي المصنع = متوسط قيم الأقسام (كل قسم بنفس الوزن، من غير ترجيح بالكمية أو الزمن).'+(ach?' المعروض هنا متوسط نسب الإنجاز (القيمة ÷ المستهدف).':''):'قيمة كل قسم وإجمالي المصنع = مجموع البسط ÷ مجموع المقام لكل الشهر (طريقة الإكسل). مراكز العمل المعلّمة «خارج المؤشرات» مش داخلة هنا.'};}
 function viewMonth(){if(!R.validDays.length)return '';return `<div class="card hotc"><h3>② مؤشرات الشهر — إجمالي المصنع وكل قسم وكل مركز عمل</h3>
-  <div class="row"><label>طريقة الحساب</label><select id="mtm"><option value="avg">زي بوابة الإدارة: متوسط الأيام ← متوسط الأقسام</option><option value="ratio">مجموع ÷ مجموع (زي الإكسل)</option></select><button id="mtc1" type="button">نسخ إجمالي المصنع</button><button id="mtc2" type="button">نسخ الأقسام</button><button id="mtc3" type="button">نسخ كل مراكز العمل</button><button id="mtfo" type="button">طيّ الأقسام</button><button id="mtun" type="button">فتح الأقسام</button></div>
+  <div class="row"><label>طريقة الحساب</label><select id="mtm"><option value="avg">زي البوابة: القسم = مجموع÷مجموع، والمصنع = متوسط الأقسام</option><option value="ratio">مجموع ÷ مجموع للمصنع كله (زي الإكسل)</option></select><label>متوسط الأقسام يتحسب من</label><select id="mtb"><option value="val">القيم الفعلية للأقسام</option><option value="ach">نسب إنجاز الأقسام (القيمة ÷ المستهدف)</option></select><button id="mtc1" type="button">نسخ إجمالي المصنع</button><button id="mtc2" type="button">نسخ الأقسام</button><button id="mtc3" type="button">نسخ كل مراكز العمل</button><button id="mtfo" type="button">طيّ الأقسام</button><button id="mtun" type="button">فتح الأقسام</button></div>
   <p class="muted" id="mtnote"></p><div id="mtbox"></div></div>`;}
-function drawMonth(){const box=$('#mtbox');if(!box)return;const C=mtCalc(MT.method),pc1=v=>v==null?'':(Math.round(v*1000)/10).toFixed(1);$('#mtnote').textContent=C.note;
+function drawMonth(){const box=$('#mtbox');if(!box)return;const C=mtCalc(MT.method),pc1=v=>v==null?'':(Math.round(v*1000)/10).toFixed(1);$('#mtnote').textContent=C.note;$('#mtb').disabled=!C.avg;
   const IND=[['u','استغلال الطاقة الإنتاجية للأقسام الإنتاجية',.85,'حجم الإنتاج الفعلي','الطاقة الإنتاجية القصوى'],['p','الأداء في OEE للأقسام الإنتاجية',1,'الزمن المثالي للإنتاج الفعلي (دقيقة)','زمن التشغيل الفعلي (دقيقة)'],['a','التوافر في OEE للأقسام الإنتاجية',1,'زمن التشغيل الفعلي (دقيقة)','زمن الإنتاج المخطط (دقيقة)']];
-  const pill=v=>{const [t,c]=mtSt(v);return `<span class="pl ${c}">${t}</span>`;};
-  const plant=`<div class="tw"><table class="kt"><thead><tr><th>المؤشر</th><th>الفترة</th><th>المستهدف</th><th>إجمالي المصنع</th><th>الحالة</th><th>البسط والمقام</th></tr></thead><tbody>${IND.map(([k,t,tg,nu,de])=>{const v=C.plant[k],n=C.plant['n'+k];return `<tr><td class="dn">${t}</td><td>${C.per}</td><td>${Math.round(tg*100)}%</td><td><b class="mv v${mtSt(v)[1]}">${pcs(v)}</b><br><small class="muted">فترة ${C.per} — ${C.avg?`متوسط ${n} قسم`:`مجموع ÷ مجموع (${n} قسم)`}</small></td><td>${pill(v)}</td><td class="fm"><b>بسط:</b> ${nu}<br><b>مقام:</b> ${de}</td></tr>`;}).join('')}</tbody></table></div>`;
-  let rows='';C.depts.forEach((d,i)=>{const cl=MT.col.has(String(i)),c=(v)=>`<td class="v${mtSt(v)[1]}">${pcs(v)}</td>`;
-    rows+=`<tr class="subr dprow ${cl?'cl':''}" data-dp="${i}"><td class="dn"><span class="ar">${cl?'▸':'▾'}</span> ${esc(d.dept)} <span class="muted">(${d.wcs.length} مركز)</span></td><td>${d.n}</td>${c(d.u)}${c(d.p)}${c(d.a)}</tr>`;
-    d.wcs.forEach(w=>{rows+=`<tr data-pd="${i}" style="${cl?'display:none':''}"><td class="wcn2">${esc(w.wc)}</td><td>${w.n}</td>${c(w.u)}${c(w.p)}${c(w.a)}</tr>`;});});
-  box.innerHTML=`<h4>إجمالي المصنع</h4>${plant}<h4>الأقسام ومراكز العمل <span class="muted">(اضغط على القسم لطيّه أو فتحه)</span></h4><div class="tw"><table class="kt" id="mttab"><thead><tr><th>القسم / مركز العمل</th><th>أيام محسوبة</th><th>استغلال الطاقة (85%)</th><th>الأداء (100%)</th><th>التوافر (100%)</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const pill=(v,tg)=>{const [t,c]=mtSt(v,tg);return `<span class="pl ${c}">${t}</span>`;};
+  const plant=`<div class="tw"><table class="kt"><thead><tr><th>المؤشر</th><th>الفترة</th><th>المستهدف</th><th>إجمالي المصنع</th><th>الحالة</th><th>البسط والمقام</th></tr></thead><tbody>${IND.map(([k,t,tg,nu,de])=>{const v=C.plant[k],n=C.plant['n'+k],isA=C.ach&&k==='u';return `<tr><td class="dn">${t}</td><td>${C.per}</td><td>${Math.round(tg*100)}%</td><td><b class="mv v${mtSt(isA?v:v,isA?1:tg)[1]}">${pcs(v)}</b><br><small class="muted">فترة ${C.per} — ${C.avg?(isA?`متوسط نسب إنجاز ${n} قسم`:`متوسط ${n} قسم`):`مجموع ÷ مجموع (${n} قسم)`}</small></td><td>${pill(v,isA?1:tg)}</td><td class="fm"><b>بسط:</b> ${nu}<br><b>مقام:</b> ${de}</td></tr>`;}).join('')}</tbody></table></div>`;
+  let rows='';C.depts.forEach((d,i)=>{const cl=MT.col.has(String(i)),c=(v,tg)=>`<td class="v${mtSt(v,tg)[1]}">${pcs(v)}</td>`;
+    rows+=`<tr class="subr dprow ${cl?'cl':''}" data-dp="${i}"><td class="dn"><span class="ar">${cl?'▸':'▾'}</span> ${esc(d.dept)} <span class="muted">(${d.wcs.length} مركز)</span></td><td>${d.n}</td>${c(d.u,.85)}${c(d.p,1)}${c(d.a,1)}</tr>`;
+    d.wcs.forEach(w=>{rows+=`<tr data-pd="${i}" style="${cl?'display:none':''}"><td class="wcn2">${esc(w.wc)}</td><td>${w.n}</td>${c(w.u,.85)}${c(w.p,1)}${c(w.a,1)}</tr>`;});});
+  box.innerHTML=`<h4>إجمالي المصنع</h4>${plant}<h4>الأقسام ومراكز العمل <span class="muted">(اضغط على القسم لطيّه أو فتحه — مراكز العمل المعلّمة «خارج المؤشرات» مش معروضة هنا)</span></h4><div class="tw"><table class="kt" id="mttab"><thead><tr><th>القسم / مركز العمل</th><th>أيام محسوبة</th><th>استغلال الطاقة (85%)</th><th>الأداء (100%)</th><th>التوافر (100%)</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   $$('#mttab tr[data-dp]').forEach(r=>r.onclick=()=>{const k=r.dataset.dp,cl=!MT.col.has(k);if(cl)MT.col.add(k);else MT.col.delete(k);r.classList.toggle('cl',cl);r.querySelector('.ar').textContent=cl?'▸':'▾';$$(`#mttab tr[data-pd="${k}"]`).forEach(x=>x.style.display=cl?'none':'');});
   const cp=(id,txt)=>{$(id).onclick=()=>copy(txt(),'مؤشرات الشهر');};
   cp('#mtc1',()=>['المؤشر\tالقيمة %\tعدد الأقسام'].concat(IND.map(([k,t])=>[t,pc1(C.plant[k]),C.plant['n'+k]].join('\t'))).join('\n'));
   cp('#mtc2',()=>['القسم\tاستغلال الطاقة %\tالأداء %\tالتوافر %'].concat(C.depts.map(d=>[d.dept,pc1(d.u),pc1(d.p),pc1(d.a)].join('\t'))).join('\n'));
   cp('#mtc3',()=>['القسم\tمركز العمل\tأيام\tاستغلال الطاقة %\tالأداء %\tالتوافر %'].concat(C.depts.flatMap(d=>d.wcs.map(w=>[d.dept,w.wc,w.n,pc1(w.u),pc1(w.p),pc1(w.a)].join('\t')))).join('\n'));}
-function bindMonth(){if(!$('#mtbox'))return;$('#mtm').value=MT.method;$('#mtm').onchange=e=>{MT.method=e.target.value;drawMonth();};
+function bindMonth(){if(!$('#mtbox'))return;$('#mtm').value=MT.method;$('#mtb').value=MT.basis;
+  const again=()=>{const y=window.scrollY;render();window.scrollTo(0,y);};
+  $('#mtm').onchange=e=>{MT.method=e.target.value;again();};$('#mtb').onchange=e=>{MT.basis=e.target.value;drawMonth();};
   $('#mtfo').onclick=()=>{MT.col=new Set(R.monthTable().map((_,i)=>String(i)));drawMonth();};$('#mtun').onclick=()=>{MT.col=new Set();drawMonth();};drawMonth();}
 /* ---------- Dashboard (top of KPI tab): rings, month trend, department bars ---------- */
-const DB={hide:new Set()},KP3=[['u','استغلال الطاقة',.85,'#1c6fb5'],['p','الأداء',1,'#7c3aed'],['a','التوافر',1,'#0d9488']];
+const DB={hide:new Set(),scope:'month'},KP3=[['u','استغلال الطاقة',.85,'#1c6fb5'],['p','الأداء',1,'#7c3aed'],['a','التوافر',1,'#0d9488']];
 const pcs=v=>v==null?'—':(Math.round(v*1000)/10).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
 function dbAgg(rows){const t={qty:0,cap:0,ideal:0,run:0,plan:0};rows.forEach(r=>{t.qty+=r.qty;t.cap+=r.cap;t.ideal+=r.ideal;t.run+=r.run;t.plan+=r.plan;});return Object.assign(t,{u:t.cap?t.qty/t.cap:null,p:t.run?t.ideal/t.run:null,a:t.plan?t.run/t.plan:null});}
 function dbSeries(){const g=new Map();R.log.forEach(r=>{let a=g.get(r.day);if(!a){a=[];g.set(r.day,a);}a.push(r);});return R.validDays.map(d=>Object.assign({d},dbAgg(g.get(d)||[])));}
-function viewDash(d){const ser=dbSeries(),i=ser.findIndex(x=>x.d===d);if(i<0)return '';const cur=ser[i],prev=i>0?ser[i-1]:null,C=2*Math.PI*42;
+function viewDash(d){const ser=dbSeries(),i=ser.findIndex(x=>x.d===d);if(i<0)return '';const month=DB.scope==='month',MC=month?mtCalc(MT.method):null,cur=month?MC.plantV:ser[i],prev=month?null:(i>0?ser[i-1]:null),C=2*Math.PI*42,cnt=k=>month?MC.plantV['n'+k]:R.dayTable(d).filter(r=>r[k]!=null).length,scopeTxt=month?'إجمالي الشهر '+MC.per:'يوم '+iso(d),methTxt=k=>MT.method==='avg'?'متوسط '+cnt(k)+' قسم':'مجموع ÷ مجموع';
   const ring=([k,t,tg,col])=>{const v=cur[k],pv=prev?prev[k]:null,ok=v!=null&&v>=tg-1e-9,dl=(v!=null&&pv!=null)?(v-pv)*100:null,a=tg*2*Math.PI;
     const tick=tg<1?`<line x1="${50+36*Math.cos(a)}" y1="${50+36*Math.sin(a)}" x2="${50+48*Math.cos(a)}" y2="${50+48*Math.sin(a)}" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round"/>`:'';
     return `<div class="ring-card" style="--rc:${col}"><div class="ring"><svg viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="42" fill="none" stroke-width="9"/><circle class="fg" data-f="${v==null?0:Math.min(v,1)}" cx="50" cy="50" r="42" fill="none" stroke="${ok?'var(--good)':'var(--bad)'}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C}"/>${tick}</svg><div class="rv ${ok?'good':'bad'}" ${v==null?'':`data-cu="${v*100}"`}>${pcs(v)}</div></div>
-     <div class="rc-b"><div class="rc-t">${t}</div><div class="rc-s">الهدف ${Math.round(tg*100)}%</div><div class="rc-s ${ok?'good':'bad'}">${v==null?'لا يوجد بيانات':ok?'✔ محقق':'أقل من الهدف بـ '+((tg-v)*100).toFixed(1)+' نقطة'}</div>${dl==null?'':`<div class="delta ${dl>=0?'up':'dn'}">${dl>=0?'▲':'▼'} ${Math.abs(dl).toFixed(1)} نقطة عن اليوم السابق</div>`}</div></div>`;};
-  const day=R.recs.filter(r=>r.day===d&&!r.excluded&&r.plan>0),au=day.filter(r=>r.auto).length,stopH=day.reduce((s,r)=>s+Math.max(0,r.plan-r.run),0)/60,nrow=S.data.filter(r=>r.day===d&&!(r.x&&r.x.draft)).length;
+     <div class="rc-b"><div class="rc-t">${t}</div><div class="rc-s">الهدف ${Math.round(tg*100)}% — ${scopeTxt} — ${methTxt(k)}</div><div class="rc-s ${ok?'good':'bad'}">${v==null?'لا يوجد بيانات':ok?'✔ محقق':'أقل من الهدف بـ '+((tg-v)*100).toFixed(1)+' نقطة'}</div>${dl==null?'':`<div class="delta ${dl>=0?'up':'dn'}">${dl>=0?'▲':'▼'} ${Math.abs(dl).toFixed(1)} نقطة عن اليوم السابق</div>`}</div></div>`;};
+  const dayAll=R.recs.filter(r=>r.day===d&&!r.excluded&&r.plan>0),day=dayAll.filter(r=>!r.noKpi),au=day.filter(r=>r.auto).length,stopH=dayAll.reduce((s,r)=>s+Math.max(0,r.plan-r.run),0)/60,nrow=S.data.filter(r=>r.day===d&&!(r.x&&r.x.draft)).length;
   const tile=(n,l,go)=>`<div class="tile ${go?'act':''}" ${go?`data-go="${go}" tabindex="0"`:''}><b>${n}</b><span>${l}</span></div>`;
   const legend=KP3.map(([k,t,,col])=>`<span class="lgd ${DB.hide.has(k)?'off':''}" data-lg="${k}"><i style="background:${col}"></i>${t}</span>`).join('');
   const dep=R.dayTable(d).map(r=>`<div class="dcard"><div class="dn">${esc(r.dept)}</div>${KP3.map(([k,t,tg,col])=>{const v=r[k],ok=v!=null&&v>=tg-1e-9;return `<div class="mb"><span>${t}</span><span class="tr"><i style="width:${v==null?0:Math.min(v,1)*100}%;background:${ok?'var(--good)':'var(--bad)'}"></i>${tg<1?`<s class="tg" style="inset-inline-start:${tg*100}%"></s>`:''}</span><b class="${ok?'good':'bad'}">${pcs(v)}</b></div>`;}).join('')}</div>`).join('');
-  return `<div class="dash">${KP3.map(ring).join('')}</div>
+  const ctl=`<div class="row dashc"><label>الحلقات بتعرض</label><span class="seg"><button type="button" class="${month?'pri':''}" data-sc="month">إجمالي الشهر</button><button type="button" class="${month?'':'pri'}" data-sc="day">اليوم المختار</button></span><label>حساب المصنع</label><select id="dbm"><option value="avg">متوسط الأقسام (زي البوابة)</option><option value="ratio">مجموع ÷ مجموع للمصنع كله</option></select></div>`;
+  return ctl+`<div class="dash">${KP3.map(ring).join('')}</div>
    <div class="trk-sum">${tile(day.length,'ماكينة محسوبة اليوم')}${tile(au,'احتُسبت متوقفة تلقائيًا')}${tile(d2(stopH),'ساعات التوقف اليوم — افتح التفاصيل','dt')}${tile(nrow,'صف مسجّل اليوم — افتح الإدخال','entry')}</div>
    <div class="card"><h3>اتجاه المؤشرات خلال الشهر <span class="muted">— مرّر للتفاصيل، واضغط على أي يوم لاختياره</span></h3><div class="row">${legend}</div><div class="chart" id="trendw"><div id="trend"></div><div class="tip" id="tip" hidden></div></div></div>
    <div class="card"><h3>أداء الأقسام — ${LT(iso(d))}</h3><div class="dpt">${dep}</div></div>`;}
@@ -384,7 +390,8 @@ function drawTrend(){const ser=dbSeries(),box=$('#trend');if(!box)return;const d
   svg.onclick=e=>{const i=idx(e);S.settings.selDay=ser[i].d;save();render();};}
 function cu(el){const to=+el.dataset.cu,dec=+(el.dataset.dec||1),suf=el.dataset.suf==null?'%':el.dataset.suf;if(isNaN(to))return;const fmt=v=>v.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec})+suf;
   if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches){el.textContent=fmt(to);return;}const t0=performance.now(),dur=750;const f=t=>{const k=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-k,3);el.textContent=fmt(to*e);if(k<1)requestAnimationFrame(f);};requestAnimationFrame(f);}
-function bindDash(){$$('.ring .fg').forEach(c=>{const C=+c.getAttribute('stroke-dasharray');requestAnimationFrame(()=>requestAnimationFrame(()=>{c.style.strokeDashoffset=C*(1-(+c.dataset.f));}));});
+function bindDash(){const again=()=>{const y=window.scrollY;render();window.scrollTo(0,y);};$$('[data-sc]').forEach(b=>b.onclick=()=>{DB.scope=b.dataset.sc;again();});const dm=$('#dbm');if(dm){dm.value=MT.method;dm.onchange=e=>{MT.method=e.target.value;again();};}
+  $$('.ring .fg').forEach(c=>{const C=+c.getAttribute('stroke-dasharray');requestAnimationFrame(()=>requestAnimationFrame(()=>{c.style.strokeDashoffset=C*(1-(+c.dataset.f));}));});
   $$('.ring .rv[data-cu]').forEach(cu);drawTrend();
   $$('[data-lg]').forEach(b=>b.onclick=()=>{const k=b.dataset.lg;if(DB.hide.has(k))DB.hide.delete(k);else if(DB.hide.size<2)DB.hide.add(k);b.classList.toggle('off',DB.hide.has(k));drawTrend();});
   $$('.tile[data-go]').forEach(t=>{const go=()=>{const d=S.settings.selDay;if(t.dataset.go==='dt'){DT.from=DT.to=d;tab='dt';}else tab='entry';render();};t.onclick=go;t.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}};});}
@@ -413,14 +420,14 @@ function bindLog(){const draw=()=>{const rows=logRows();let h=`<div class="tw"><
   $('#xl').onclick=()=>{const rows=logRows();const hd=['التاريخ','القسم','حجم الإنتاج الفعلي','الطاقة القصوى','استغلال الطاقة %','الزمن المثالي','زمن التشغيل','الأداء %','زمن التشغيل','الزمن المخطط','التوافر %'];
     const aoa=[hd].concat(rows.map(r=>[iso(r.day),r.dept,r.qty,r.cap,r.u,r.ideal,r.run,r.p,r.run2,r.plan,r.a]));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'KPI Daily Log');saveXlsx(wb,'KPI_Daily_Log.xlsx');};}
 /* ---------- downtime hours per machine: daily matrix + monthly totals, measured against the shift ---------- */
-const DT={from:null,to:null,dept:'',q:'',unit:'h',reason:'all',sort:'stop',hz:false,top:10};
+const DT={from:null,to:null,dept:'',q:'',unit:'h',reason:'all',sort:'stop',hz:false,top:10,kf:'all'};
 const WDL=['ح','ن','ث','ر','خ','ج','س'],d1=v=>(Math.round(v*10)/10).toLocaleString('en-US',{maximumFractionDigits:1}),d2=v=>(Math.round(v*100)/100).toLocaleString('en-US',{maximumFractionDigits:2});
 function dtInit(){if(DT.from==null||DT.to==null){DT.from=S.settings.monthStart;DT.to=R.validDays.length?R.validDays[R.validDays.length-1]:R.eom;}}
 function dtCalc(){dtInit();const sm=new Map();
   for(const r of S.data){if((r.x&&r.x.draft)||!isStop(r))continue;const k=K.norm(r.wc)+'|'+r.day;sm.set(k,(sm.get(k)||0)+(+r.hrs||0));}
   const qn=K.norm(DT.q),mm=new Map(),dset=new Set();
-  for(const r of R.recs){if(r.excluded||!(r.plan>0)||r.day<DT.from||r.day>DT.to)continue;if(DT.dept&&r.dept!==DT.dept)continue;if(qn&&!K.norm(r.wc).includes(qn))continue;
-    const n=K.norm(r.wc);let m=mm.get(n);if(!m){m={wc:r.wc,dept:r.dept||'غير مُسند',days:new Map(),plan:0,v:0,stop:0,rec:0,oth:0,nd:0,nstop:0,worst:null};mm.set(n,m);}
+  for(const r of R.recs){if(r.excluded||!(r.plan>0)||r.day<DT.from||r.day>DT.to)continue;if(DT.dept&&r.dept!==DT.dept)continue;if(qn&&!K.norm(r.wc).includes(qn))continue;if(DT.kf==='in'&&r.noKpi)continue;if(DT.kf==='out'&&!r.noKpi)continue;
+    const n=K.norm(r.wc);let m=mm.get(n);if(!m){m={wc:r.wc,noKpi:!!r.noKpi,dept:r.dept||'غير مُسند',days:new Map(),plan:0,v:0,stop:0,rec:0,oth:0,nd:0,nstop:0,worst:null};mm.set(n,m);}
     const stop=Math.max(0,r.plan-r.run),rec=Math.min((sm.get(n+'|'+r.day)||0)*60,stop),oth=stop-rec,v=DT.reason==='rec'?rec:DT.reason==='oth'?oth:stop;
     m.days.set(r.day,{plan:r.plan,stop,rec,oth,v,auto:r.auto});m.plan+=r.plan;m.v+=v;m.stop+=stop;m.rec+=rec;m.oth+=oth;m.nd++;if(v>0.01)m.nstop++;if(!m.worst||v>m.worst.v)m.worst={d:r.day,v};dset.add(r.day);}
   let ms=[...mm.values()];const all=ms.length;if(DT.hz)ms=ms.filter(m=>m.v>0.01);
@@ -433,9 +440,9 @@ function viewDT(){dtInit();return `<div class="card hotc"><h3>ساعات الت�
   <div class="row"><label>من</label><input type="date" id="dtf" value="${iso(DT.from)}"><label>إلى</label><input type="date" id="dtt" value="${iso(DT.to)}"><button id="dtm">الشهر كله</button><button id="dtd">اليوم المختار</button>
    <label>القسم</label><select id="dtdp"><option value="">كل الأقسام</option>${S.depts.map(d=>`<option>${esc(d)}</option>`).join('')}</select><input id="dtq" placeholder="🔍 بحث بالماكينة" style="width:170px" value="${esc(DT.q)}"></div>
   <div class="row"><label>الخلايا بـ</label><select id="dtu"><option value="h">ساعات</option><option value="m">دقائق</option><option value="p">% من الوردية</option></select><label>مصدر التوقف</label><select id="dtr"><option value="all">كل التوقف</option><option value="rec">المسجّل في Data بس (صفوف توقف)</option><option value="oth">غير المسجّل (فرق الوردية + التوقف التلقائي)</option></select>
-   <label>ترتيب الماكينات</label><select id="dts"><option value="stop">الأكتر توقفًا</option><option value="dept">حسب القسم</option><option value="name">الاسم</option></select><label>أكبر</label><select id="dtn"><option>5</option><option>10</option><option>20</option><option value="999">الكل</option></select><label><input type="checkbox" id="dthz"> إخفاء اللي مفيش عليها توقف</label>
+   <label>ترتيب الماكينات</label><select id="dts"><option value="stop">الأكتر توقفًا</option><option value="dept">حسب القسم</option><option value="name">الاسم</option></select><label>أكبر</label><select id="dtn"><option>5</option><option>10</option><option>20</option><option value="999">الكل</option></select><label>مراكز العمل</label><select id="dtk"><option value="all">الكل (حتى الخارجة من المؤشرات)</option><option value="in">الداخلة في المؤشرات بس</option><option value="out">الخارجة من المؤشرات بس</option></select><label><input type="checkbox" id="dthz"> إخفاء اللي مفيش عليها توقف</label>
    <button id="dtcp">نسخ الجدول</button><button id="dtxl">تصدير Excel</button></div>
-  <p class="muted">التوقف = الزمن المخطط − زمن التشغيل (نفس حساب التوافر في البرنامج). الزمن المخطط هو الوردية (${d2((+S.settings.shift||480)/60)} ساعة) أو ساعات التسجيل لو أكتر. «مسجّل» = صفوف التوقف في Data، و«غير مسجّل» = فرق الوردية عن الساعات المسجلة + الماكينة اللي ما اتسجلتش في يوم شغل (توقف تلقائي).</p><div id="dtout"></div></div>`;}
+  <p class="muted">التوقف = الزمن المخطط − زمن التشغيل (نفس حساب التوافر في البرنامج). الزمن المخطط هو الوردية (${d2((+S.settings.shift||480)/60)} ساعة) أو ساعات التسجيل لو أكتر. «مسجّل» = صفوف التوقف في Data، مراكز العمل المعلّمة «خارج المؤشرات» ظاهرة هنا ومحسوبة في التوقف (بس مش في الاستغلال والأداء والتوافر). و«غير مسجّل» = فرق الوردية عن الساعات المسجلة + الماكينة اللي ما اتسجلتش في يوم شغل (توقف تلقائي).</p><div id="dtout"></div></div>`;}
 function drawDT(){const C=dtCalc(),o=$('#dtout');
   if(!C.all){o.innerHTML='<div class="hs warn">لا يوجد بيانات توقف في الفترة والفلاتر دي — راجع الفترة أو القسم، أو أن مراكز العمل مسجلة في تبويب «مراكز العمل»</div>';DT.last=null;return;}
   const {ms,days,dtot,shift}=C,u=DT.unit,hrs=m=>m/60;
@@ -450,7 +457,7 @@ function drawDT(){const C=dtCalc(),o=$('#dtout');
   const bars=top.length?`<h4>ترتيب الماكينات حسب ساعات التوقف <span class="muted"><span class="lg r"></span> مسجّل في Data <span class="lg a"></span> غير مسجّل / تلقائي</span></h4><div class="rk">${top.map((m,i)=>{const [a,b]=seg(m);return `<div class="rkr"><span class="rkn">${i+1}. ${esc(m.wc)} <small class="muted">${esc(m.dept)}</small></span><span class="bar2"><i class="sg1" style="width:${a/mx*100}%"></i><i class="sg2" style="width:${b/mx*100}%"></i></span><b>${d2(hrs(m.v))} س</b><small class="muted">${d1(m.plan?m.v/m.plan*100:0)}%</small></div>`;}).join('')}</div>`:'<div class="hs ok">✔ لا يوجد توقف في الفترة دي</div>';
   /* monthly summary per machine */
   const hd=['#','الماكينة','القسم','أيام مخططة','أيام فيها توقف','ساعات مخططة','ساعات التوقف','% من المخطط','وردية ضايعة','متوسط توقف/يوم (س)','مسجّل في Data (س)','غير مسجّل / تلقائي (س)','التوافر %','أسوأ يوم'];
-  const sRow=(m,i)=>[i,m.wc,m.dept,m.nd,m.nstop,d2(hrs(m.plan)),d2(hrs(m.v)),d1(m.plan?m.v/m.plan*100:0)+'%',d1(m.v/shift),d2(m.nd?hrs(m.v)/m.nd:0),d2(hrs(m.rec)),d2(hrs(m.oth)),d1(m.plan?(m.plan-m.stop)/m.plan*100:0)+'%',m.worst&&m.worst.v>0?iso(m.worst.d).slice(5)+' ('+d2(hrs(m.worst.v))+' س)':'—'];
+  const sRow=(m,i)=>[i,m.wc+(m.noKpi?' (خارج المؤشرات)':''),m.dept,m.nd,m.nstop,d2(hrs(m.plan)),d2(hrs(m.v)),d1(m.plan?m.v/m.plan*100:0)+'%',d1(m.v/shift),d2(m.nd?hrs(m.v)/m.nd:0),d2(hrs(m.rec)),d2(hrs(m.oth)),d1(m.plan?(m.plan-m.stop)/m.plan*100:0)+'%',m.worst&&m.worst.v>0?iso(m.worst.d).slice(5)+' ('+d2(hrs(m.worst.v))+' س)':'—'];
   const grp=DT.sort==='dept';const sb=[];let cur=null,agg=null;
   const flush=()=>{if(agg)sb.push({t:'s',c:['','إجمالي '+cur,'',agg.nd,agg.ns,d2(hrs(agg.plan)),d2(hrs(agg.v)),d1(agg.plan?agg.v/agg.plan*100:0)+'%',d1(agg.v/shift),'',d2(hrs(agg.rec)),d2(hrs(agg.oth)),d1(agg.plan?(agg.plan-agg.stop)/agg.plan*100:0)+'%','']});};
   ms.forEach((m,i)=>{if(grp&&m.dept!==cur){flush();cur=m.dept;agg={nd:0,ns:0,plan:0,v:0,rec:0,oth:0,stop:0};}
@@ -466,7 +473,7 @@ function drawDT(){const C=dtCalc(),o=$('#dtout');
   const mrows=[];let cur2=null;
   const dsub=(label,list)=>({t:'s',c:[label,''].concat(days.map(d=>{let s=0,p=0;list.forEach(m=>{const c=m.days.get(d);if(c){s+=c.v;p+=c.plan;}});return p?cellTxt(s,p):'';}),[totTxt(list.reduce((s,m)=>s+m.v,0),list.reduce((s,m)=>s+m.plan,0))])});
   ms.forEach((m,i)=>{if(grp&&m.dept!==cur2){if(cur2!==null)mrows.push(dsub('إجمالي '+cur2,ms.filter(x=>x.dept===cur2)));cur2=m.dept;}
-    mrows.push({t:'r',m,c:[m.wc,m.dept].concat(days.map(d=>{const c=cellOf(m,d);return c?cellTxt(c.v,c.plan):'';}),[totTxt(m.v,m.plan)])});});
+    mrows.push({t:'r',m,c:[m.wc+(m.noKpi?' (خارج المؤشرات)':''),m.dept].concat(days.map(d=>{const c=cellOf(m,d);return c?cellTxt(c.v,c.plan):'';}),[totTxt(m.v,m.plan)])});});
   if(grp&&cur2!==null)mrows.push(dsub('إجمالي '+cur2,ms.filter(x=>x.dept===cur2)));
   mrows.push({t:'t',c:['الإجمالي',''].concat(days.map(d=>{let s=0,p=0;ms.forEach(m=>{const c=m.days.get(d);if(c){s+=c.v;p+=c.plan;}});return p?cellTxt(s,p):'';}),[totTxt(C.v,C.plan)])});
   const thDay=d=>{const w=K.serToDate(d).getUTCDay();return `<th class="${w===5||w===6?'we':''}">${+iso(d).slice(8)}<br><small>${WDL[w]}</small></th>`;};
@@ -484,7 +491,7 @@ function bindDT(){const rr=()=>drawDT();
   $('#dtdp').value=DT.dept;$('#dtdp').onchange=e=>{DT.dept=e.target.value;rr();};$('#dtq').oninput=e=>{DT.q=e.target.value;rr();};
   $('#dtu').value=DT.unit;$('#dtu').onchange=e=>{DT.unit=e.target.value;rr();};$('#dtr').value=DT.reason;$('#dtr').onchange=e=>{DT.reason=e.target.value;rr();};
   $('#dts').value=DT.sort;$('#dts').onchange=e=>{DT.sort=e.target.value;rr();};$('#dtn').value=String(DT.top);$('#dtn').onchange=e=>{DT.top=+e.target.value;rr();};
-  $('#dthz').checked=DT.hz;$('#dthz').onchange=e=>{DT.hz=e.target.checked;rr();};
+  $('#dtk').value=DT.kf;$('#dtk').onchange=e=>{DT.kf=e.target.value;rr();};$('#dthz').checked=DT.hz;$('#dthz').onchange=e=>{DT.hz=e.target.checked;rr();};
   $('#dtcp').onclick=()=>{if(!DT.last)return;copy([DT.last.mat[0]].concat(DT.last.mat[1]).map(r=>r.join('\t')).join('\n'),'جدول التوقف');};
   $('#dtxl').onclick=()=>{if(!DT.last)return toast('لا يوجد بيانات','warn');const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([DT.last.sh[0]].concat(DT.last.sh[1])),'إجمالي الشهر');XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([DT.last.mat[0]].concat(DT.last.mat[1])),'يوم بيوم');saveXlsx(wb,'Downtime_Hours.xlsx');};
   drawDT();}
@@ -499,7 +506,7 @@ function bindStops(){const list=R.autoList.slice().sort((a,b)=>a.day-b.day||0);
   const rows=()=>list.filter(r=>(!$('#sd').value||r.dept===$('#sd').value)&&(!$('#sday').value||r.day===+$('#sday').value));
   const draw=()=>{const l=rows();$('#stl').innerHTML=`<div class="tw"><table class="kt"><thead><tr><th>التاريخ</th><th>Work Center</th><th>القسم</th><th>دقايق مخططة احتُسبت توقف</th><th>الملحوظة</th></tr></thead><tbody>${l.map(r=>`<tr><td>${iso(r.day)}</td><td class="dn">${esc(r.wc)}</td><td>${esc(r.dept)}</td><td>${fn(r.plan)}</td><td class="muted">غير مسجل في Data — احتُسب متوقف</td></tr>`).join('')}</tbody></table></div><p class="muted">${l.length} صف</p>`;};
   $('#sd').onchange=draw;$('#sday').onchange=draw;draw();$('#cpS').onclick=()=>copy(rows().map(r=>[iso(r.day),r.wc,r.dept,r.plan].join('\t')).join('\n'),'سجل التوقف');}
-function mapStatus(m){const n=K.norm(m.name);if(!n)return '';if(R.dup.includes(n))return '⚠ اسم مكرر';if(!m.dept)return '⚠ القسم ناقص';if(m.inc==='لا')return '⏸ موجود بس مستبعد (لا)';
+function mapStatus(m){const n=K.norm(m.name);if(!n)return '';if(R.dup.includes(n))return '⚠ اسم مكرر';if(!m.dept)return '⚠ القسم ناقص';if(m.inc==='لا')return '⏸ موجود بس مستبعد (لا)';if(m.kpi==='لا')return '◐ خارج المؤشرات بس';
   const info=R.nameInfo.get(n);if(!info)return S.settings.autoStop?'ℹ لا يوجد صفوف في Data — يُحتسب متوقف كل يوم شغل':'ℹ لا يوجد صفوف في Data';return `✔ شغال — ${info.count} صف في Data`;}
 function deptSel(v,attr){return `<select ${attr}><option value="">— اختر —</option>${DEPTS_ALL.map(d=>`<option ${d===v?'selected':''}>${esc(d)}</option>`).join('')}</select>`;}
 function viewMap(){
@@ -507,16 +514,17 @@ function viewMap(){
   const um=R.unmapped;
   return `<div class="card"><h3>إضافة مركز عمل</h3><div class="row"><input id="an" list="dl_unm" placeholder="اسم مركز العمل (زي ما هو في Data)" style="width:320px">${deptSel('','id="ad"')}<input id="ao" type="number" placeholder="وردية مخصصة (دقيقة) — اختياري" style="width:200px"><button class="pri" id="addwc">+ إضافة</button></div>
    <datalist id="dl_unm">${um.map(u=>`<option value="${esc(u.name)}">`).join('')}</datalist></div>
-   <div class="grid2"><div class="card"><h3>لوحة المتابعة</h3><ul class="lst"><li>عدد مركز العمل المسجلة: <b>${tot}</b> (داخل الحساب ${inc}، مستبعدة ${tot-inc})</li><li>أسماء مكررة: <b>${R.dup.length}</b> ${R.dup.length?'⚠':''}</li><li>أسماء في Data غير موجودة هنا: <b>${um.length}</b> ${um.length?'⚠':''}</li><li>الحالة: <b>${health().length?'⚠ راجع':'✔ سليم'}</b></li></ul>
+   <div class="grid2"><div class="card"><h3>لوحة المتابعة</h3><ul class="lst"><li>عدد مركز العمل المسجلة: <b>${tot}</b> (داخل الحساب ${inc}، مستبعدة ${tot-inc}) — منهم خارج المؤشرات بس: <b>${S.map.filter(m=>K.norm(m.name)&&m.inc!=='لا'&&m.kpi==='لا').length}</b></li><li>أسماء مكررة: <b>${R.dup.length}</b> ${R.dup.length?'⚠':''}</li><li>أسماء في Data غير موجودة هنا: <b>${um.length}</b> ${um.length?'⚠':''}</li><li>الحالة: <b>${health().length?'⚠ راجع':'✔ سليم'}</b></li></ul>
     <h4>اختبار مركز عمل</h4><div class="row"><input id="tn" placeholder="أدخل الاسم" style="width:260px"><button id="tb">اختبر</button></div><div id="tr" class="muted"></div></div>
    <div class="card"><h3>أسماء في Data وغير موجود في الخريطة (${um.length})</h3>${um.length?`<ul class="lst">${um.map((u,i)=>`<li><b>${esc(u.name)}</b> <span class="muted">${u.count} صف</span> ${deptSel('',`data-qd="${i}"`)}<button data-qa="${i}">إضافة</button></li>`).join('')}</ul>`:'<p class="muted">✔ كل الأسماء مربوطة</p>'}</div></div>
    <div class="card"><div class="row"><input id="ms" placeholder="🔍 بحث بالاسم" style="width:240px"><select id="mdf"><option value="">كل الأقسام</option>${DEPTS_ALL.map(d=>`<option>${esc(d)}</option>`).join('')}</select><label><input type="checkbox" id="mw"> التحذيرات بس</label></div>
-   <div class="tw"><table class="kt mt"><thead><tr><th>Work Center</th><th>القسم</th><th>وردية مخصصة (دقيقة)</th><th>يدخل في الحساب؟</th><th>ملاحظة</th><th>الحالة</th><th></th></tr></thead><tbody id="mb"></tbody></table></div></div>`;}
+   <p class="muted"><b>يدخل في الحساب = لا</b>: المركز يتشال من كل حاجة. <b>يدخل في المؤشرات = لا</b>: المركز يفضل ظاهر ومحسوب في ساعات التشغيل والتوقف والإجماليات وتتبّع الصنف، بس مش بيدخل في الاستغلال والأداء والتوافر (عشان الكمية متتضاعفش لو بيشتغل على نفس الأصناف والمراحل مع مركز تاني).</p>
+   <div class="tw"><table class="kt mt"><thead><tr><th>Work Center</th><th>القسم</th><th>وردية مخصصة (دقيقة)</th><th>يدخل في الحساب؟</th><th>يدخل في المؤشرات؟</th><th>ملاحظة</th><th>الحالة</th><th></th></tr></thead><tbody id="mb"></tbody></table></div></div>`;}
 function drawMapRows(){const q=K.norm($('#ms').value),df=$('#mdf').value,w=$('#mw').checked;let h='';
   S.map.forEach((m,i)=>{const st=mapStatus(m);if(q&&!K.norm(m.name).includes(q))return;if(df&&m.dept!==df)return;if(w&&!/^⚠/.test(st))return;
     h+=`<tr data-i="${i}"><td><input data-f="name" value="${esc(m.name)}" class="w"></td><td>${deptSel(m.dept,'data-f="dept"')}</td><td><input data-f="ovr" type="number" value="${m.ovr||''}" style="width:90px"></td>
-    <td><select data-f="inc"><option ${m.inc!=='لا'?'selected':''}>نعم</option><option ${m.inc==='لا'?'selected':''}>لا</option></select></td><td><input data-f="note" value="${esc(m.note||'')}" class="w"></td><td class="st">${esc(st)}</td><td><button class="del" data-del="${i}">حذف</button></td></tr>`;});
-  $('#mb').innerHTML=h||'<tr><td colspan="7" class="muted">لا يوجد نتائج</td></tr>';
+    <td><select data-f="inc"><option ${m.inc!=='لا'?'selected':''}>نعم</option><option ${m.inc==='لا'?'selected':''}>لا</option></select></td><td><select data-f="kpi" title="لا = ساعاتها وتوقفاتها تظهر في الإجماليات وساعات التوقف، بس مش بتدخل في الاستغلال والأداء والتوافر"><option ${m.kpi!=='لا'?'selected':''}>نعم</option><option ${m.kpi==='لا'?'selected':''}>لا</option></select></td><td><input data-f="note" value="${esc(m.note||'')}" class="w"></td><td class="st">${esc(st)}</td><td><button class="del" data-del="${i}">حذف</button></td></tr>`;});
+  $('#mb').innerHTML=h||'<tr><td colspan="8" class="muted">لا يوجد نتائج</td></tr>';
   $$('#mb [data-f]').forEach(el=>el.onchange=()=>{const i=+el.closest('tr').dataset.i,f=el.dataset.f,m=S.map[i];
     if(f==='ovr')m.ovr=+el.value>0?+el.value:null;else m[f]=el.value;save();render();toast('✔ تم حفظ التعديل على '+m.name);});
   $$('#mb [data-del]').forEach(b=>b.onclick=async()=>{const i=+b.dataset.del,m=S.map[i];if(!await ask('حذف "'+m.name+'" من الخريطة؟\nلو ليه بيانات في Data مش ستُحتسب. (لو ترغب تخرجه من الحساب بس اختر "لا")'))return;
@@ -533,7 +541,7 @@ function bindMap(){drawMapRows();['#ms','#mdf','#mw'].forEach(s=>$(s).oninput=dr
   $$('[data-qa]').forEach(b=>b.onclick=()=>{const i=+b.dataset.qa,u=R.unmapped[i],dept=$(`[data-qd="${i}"]`).value;if(!dept)return toast('اختر القسم الأول','warn');
     S.map.push({name:u.name,dept,ovr:null,inc:'نعم',note:''});save();render();toast(`✔ تمت إضافة "${u.name}" — ${dept} — ${u.count} صف بقوا يُحتسبوا`);});
   $('#tb').onclick=()=>{const n=K.norm($('#tn').value);if(!n){$('#tr').textContent='';return;}const m=S.map.find(x=>K.norm(x.name)===n),info=R.nameInfo.get(n);
-    $('#tr').innerHTML=m?`✔ <b>موجود</b> — ${esc(m.dept||'بدون قسم')} — ${m.inc==='لا'?'مستبعد من الحساب':'داخل الحساب'} — ${info?info.count+' صف في Data':'لا يوجد صفوف في Data'}`:`✖ <b>غير موجود في الخريطة</b>${info?` — وليه ${info.count} صف في Data مش يُحتسبوا`:''}`;};}
+    $('#tr').innerHTML=m?`✔ <b>موجود</b> — ${esc(m.dept||'بدون قسم')} — ${m.inc==='لا'?'مستبعد من الحساب':m.kpi==='لا'?'داخل الحساب وخارج المؤشرات':'داخل الحساب'} — ${info?info.count+' صف في Data':'لا يوجد صفوف في Data'}`:`✖ <b>غير موجود في الخريطة</b>${info?` — وليه ${info.count} صف في Data مش يُحتسبوا`:''}`;};}
 function viewSettings(){
   const st=S.settings;
   return `<div class="grid2"><div class="card"><h3>استبعاد مركز عمل بتاريخ</h3><p class="muted">"من" و"إلى" فاضيين = كل الأيام. "من" بس = يوم واحد. الاثنين = فترة. البيانات بتفضل في Data وبتخرج من الحساب بس.</p>
@@ -578,7 +586,7 @@ function parseAOA(aoa){let hi=-1;for(let i=0;i<Math.min(aoa.length,8);i++){if((a
   return {rows};}
 function sheetsOf(wb){return wb.SheetNames.map(n=>({name:n,res:parseAOA(XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:null}))})).filter(x=>x.res&&x.res.rows&&x.res.rows.length);}
 function loadCalculator(wb){const g=(ws,a)=>ws&&ws[a]?ws[a].v:undefined;const M=wb.Sheets['KPI Map'],X=wb.Sheets['KPI Exclusions'],E=wb.Sheets['KPI Entry'];
-  const map=[];for(let r=4;r<=300;r++){const n=g(M,'A'+r);if(n==null||String(n).trim()==='')continue;map.push({name:String(n),dept:g(M,'B'+r)||'',ovr:+g(M,'D'+r)>0?+g(M,'D'+r):null,inc:g(M,'E'+r)==='لا'?'لا':'نعم',note:g(M,'C'+r)||''});}
+  const map=[];for(let r=4;r<=300;r++){const n=g(M,'A'+r);if(n==null||String(n).trim()==='')continue;map.push({name:String(n),dept:g(M,'B'+r)||'',ovr:+g(M,'D'+r)>0?+g(M,'D'+r):null,inc:g(M,'E'+r)==='لا'?'لا':'نعم',kpi:g(M,'F'+r)==='لا'?'لا':'نعم',note:g(M,'C'+r)||''});}
   const excl=[];for(let r=4;r<=63;r++){const n=g(X,'A'+r);if(!n)continue;excl.push({wc:String(n),from:toSer(g(X,'C'+r)),to:toSer(g(X,'D'+r)),reason:g(X,'E'+r)||''});}
   const off=[];for(let r=8;r<=27;r++){const d=toSer(g(X,'K'+r));if(d)off.push(d);}
   const depts=[];for(let r=11;r<=18;r++){const d=g(E,'A'+r);if(d)depts.push(String(d));}
@@ -886,19 +894,19 @@ function drawList(rows){const wcn=K.norm(TM.wc);
   $$('#mbox details[data-mk]').forEach(d=>d.ontoggle=()=>TM.opened.set(d.dataset.mk,d.open));
   $$('#mbox [data-tr]').forEach(b=>b.onclick=e=>{e.preventDefault();TM.q=b.dataset.tr;TM.off=new Set();$('#mq').value=TM.q;drawMulti();});
   const mm=$('#mmore');if(mm)mm.onclick=()=>{TM.limit+=TM.limit>=9999?0:Math.max(10,TM.limit);$('#mlim').value=String(TM.limit);drawMulti();};}
-function viewTot(){ttInit();return `<div class="card"><h3>إجماليات مراكز العمل — كميات الإنتاج وساعات التشغيل (موزعة حسب الأقسام)</h3><div class="row"><label>من</label><input type="date" id="tf" value="${iso(TT.from)}"><label>إلى</label><input type="date" id="tt" value="${iso(TT.to)}">
-  <button id="tm">الشهر كله</button><button id="td">اليوم المختار</button><label>التفصيل</label><select id="tmode"><option value="wc">لكل مركز عمل (إجمالي الفترة)</option><option value="day">لكل مركز عمل ولكل يوم</option><option value="prod">لكل مركز عمل ولكل صنف</option></select>
-  <label>القسم</label><select id="tdp"><option value="">كل الأقسام</option>${DEPTS_ALL.map(d=>`<option>${esc(d)}</option>`).join('')}</select><label><input type="checkbox" id="tsub" checked> إجمالي كل قسم</label></div>
-  <div class="bar"><button id="tcp">نسخ (بدون عناوين)</button><button id="tcph">نسخ مع العناوين</button><button id="txl">تصدير Excel</button><span id="tcount" class="muted"></span></div><div class="tw"><table class="kt" id="ttab"></table></div></div>
-  <div class="card hotc"><h3>تتبّع الصنف — مساره عبر مراحل التصنيع ومراكز العمل</h3>
+function viewTot(){ttInit();return `<div class="card hotc"><h3>تتبّع الصنف — مساره عبر مراحل التصنيع ومراكز العمل</h3>
   <div class="row"><input id="mq" placeholder="🔍 اكتب اسم الصنف أو جزء منه — مثال: رف 50*70" style="width:320px"><label>دقة البحث</label><select id="macc"><option value="0.85">دقيق</option><option value="0.75">متوسط</option><option value="0.65">واسع</option></select><label>ترتيب المراحل</label><select id="mord"><option value="dept">حسب ترتيب الأقسام</option><option value="first">حسب أول ظهور</option></select><label>مركز عمل</label><select id="mwc"></select></div>
-  <div class="row"><label>الفترة</label><select id="mper"><option value="top">زي الجدول اللي فوق</option><option value="day">يوم واحد</option><option value="range">من يوم لـ يوم</option><option value="last7">آخر 7 أيام (من آخر يوم فيه بيانات)</option><option value="month">الشهر كله</option><option value="all">كل البيانات</option></select>
+  <div class="row"><label>الفترة</label><select id="mper"><option value="top">زي جدول سجل مراكز العمل (تحت)</option><option value="day">يوم واحد</option><option value="range">من يوم لـ يوم</option><option value="last7">آخر 7 أيام (من آخر يوم فيه بيانات)</option><option value="month">الشهر كله</option><option value="all">كل البيانات</option></select>
    <span id="mdayc" class="row" style="margin:0"><button id="mdprev">◀</button><select id="mdsel"></select><button id="mdnext">▶</button></span><span id="mrng" class="row" style="margin:0"><input type="date" id="mf"><input type="date" id="mt"></span>
    <label>العرض</label><select id="mview"><option value="sum">إجمالي الفترة</option><option value="days">يوم بيوم</option></select><span id="mpinfo" class="muted"></span></div>
   <div class="row"><span class="muted">قايمة الأصناف (لما خانة البحث فاضية):</span><label>على الأقل</label><select id="mmin"><option value="1">1 مركز عمل</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5+</option></select><label><input type="checkbox" id="mcr"> عبر أقسام مختلفة بس</label><label>ترتيب</label><select id="msort"><option value="wcs">أكتر مركز عمل</option><option value="qty">أكبر كمية</option><option value="name">الاسم</option></select>
    <label>تشابه الأسماء</label><select id="tsim">${SIMOPT(simThr())}</select><label>عدد النتايج</label><select id="mlim"><option>10</option><option>25</option><option>50</option><option value="9999">الكل</option></select><button id="mfold">طيّ الكل</button><button id="munf">فتح الكل</button></div>
   <div id="mcount" class="muted"></div>
   <p class="muted">البحث بيتجاهل الفرق بين أ/ا وة/ه والتشكيل والمسافات والرموز، وبيلاقي الكلمة حتى لو جزء من اسم أطول أو فيها غلطة بسيطة، وترتيب الكلمات مش فارق. الأرقام والمقاسات لازم تتطابق (50*70 هي هي 70×50 و٥٠×٧٠). كل اسم متلقى بتقدر تشيله لو مش قصدك، والمسار بيتحدّث على طول. صفوف التوقف مش بتتحسب.</p><div id="mbox"></div></div>
+  <div class="card"><h3>سجل كل مركز عمل — كميات الإنتاج وساعات التشغيل والتوقف (موزعة حسب الأقسام)</h3><div class="row"><label>من</label><input type="date" id="tf" value="${iso(TT.from)}"><label>إلى</label><input type="date" id="tt" value="${iso(TT.to)}">
+  <button id="tm">الشهر كله</button><button id="td">اليوم المختار</button><label>التفصيل</label><select id="tmode"><option value="wc">لكل مركز عمل (إجمالي الفترة)</option><option value="day">لكل مركز عمل ولكل يوم</option><option value="prod">لكل مركز عمل ولكل صنف</option></select>
+  <label>القسم</label><select id="tdp"><option value="">كل الأقسام</option>${DEPTS_ALL.map(d=>`<option>${esc(d)}</option>`).join('')}</select><label><input type="checkbox" id="tsub" checked> إجمالي كل قسم</label></div>
+  <div class="bar"><button id="tcp">نسخ (بدون عناوين)</button><button id="tcph">نسخ مع العناوين</button><button id="txl">تصدير Excel</button><span id="tcount" class="muted"></span></div><div class="tw"><table class="kt" id="ttab"></table></div></div>
   <div class="card"><h3>التحقق من سلامة البيانات والإجماليات</h3><div id="tchk"></div></div>
   <div class="card"><h3>مطابقة مع أرقام ملف Excel</h3><p class="muted">الصق من شيتك 3 أعمدة: اسم مركز العمل | الكمية | ساعات التشغيل (بدون عناوين). البرنامج بيقارنها بمجاميع الفترة لكل مركز عمل (كل الساعات).</p>
   <textarea id="tcmp" rows="4" placeholder="Work center&#9;الكمية&#9;الساعات"></textarea><div class="row"><button id="tcmpb" class="pri">قارن</button></div><div id="tcmpr"></div></div>`;}
