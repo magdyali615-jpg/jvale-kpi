@@ -742,10 +742,21 @@ const r2=v=>Math.round(v*100)/100, isStop=r=>K.norm(r.prod).startsWith('توقف
 function ttInit(){if(TT.from==null){const ds=S.data.map(r=>r.day).filter(d=>d>=S.settings.monthStart&&d<=R.eom);TT.from=S.settings.monthStart;TT.to=ds.length?Math.max(...ds):R.eom;}}
 function ttRows(){let rows=S.data.filter(r=>!(r.x&&r.x.draft)&&r.day>=TT.from&&r.day<=TT.to);if(TT.dept)rows=rows.filter(r=>deptOfN(K.norm(r.wc))===TT.dept);return rows;}
 function perWc(rows){const g=new Map();for(const r of rows){const n=K.norm(r.wc);let a=g.get(n);if(!a){a={wc:r.wc,qty:0,hrs:0};g.set(n,a);}a.qty+=+r.qty||0;a.hrs+=+r.hrs||0;}return g;}
-function calcTotals(){const rows=ttRows(),g=new Map();
+/* planned / run hours per work center-day (mapped centers incl. auto-stop days, plus centers that exist only in Data) */
+function hoursMap(from,to,dept){const shift=+S.settings.shift||480,out=new Map();
+  const add=(wc,day,plan,run)=>{if(!(plan>0)||day<from||day>to)return;const n=K.norm(wc);if(dept&&deptOfN(n)!==dept)return;out.set(n+'|'+day,{wc,n,day,plan,run:Math.max(0,run)});};
+  R.recs.forEach(r=>add(r.wc,r.day,r.plan,r.run));
+  const un=new Set(R.unmapped.map(u=>K.norm(u.name)));
+  if(un.size){const g=new Map();for(const r of S.data){if(r.x&&r.x.draft)continue;const n=K.norm(r.wc);if(!un.has(n)||r.day==null)continue;const k=n+'|'+r.day;let a=g.get(k);if(!a)g.set(k,a={wc:String(r.wc),day:r.day,L:0,S:0});const h=+r.hrs||0;a.L+=h;if(isStop(r))a.S+=h;}
+    g.forEach(a=>add(a.wc,a.day,Math.max(shift,a.L*60),(a.L-a.S)*60));}
+  return out;}
+function calcTotals(){const rows=ttRows(),g=new Map(),HM=TT.mode==='prod'?new Map():hoursMap(TT.from,TT.to,TT.dept);
   for(const r of rows){const n=K.norm(r.wc),key=TT.mode==='wc'?n:TT.mode==='day'?n+'|'+r.day:n+'|'+K.norm(r.prod);let a=g.get(key);
-    if(!a){a={wc:r.wc,n,day:TT.mode==='day'?r.day:null,prod:TT.mode==='prod'?r.prod:null,rows:0,days:new Set(),qty:0,run:0,stop:0};g.set(key,a);}
+    if(!a){a={wc:r.wc,n,day:TT.mode==='day'?r.day:null,prod:TT.mode==='prod'?r.prod:null,rows:0,days:new Set(),qty:0,run:0,stop:0,stopT:0,hasH:false};g.set(key,a);}
     const h=+r.hrs||0;a.rows++;a.days.add(r.day);a.qty+=+r.qty||0;if(isStop(r))a.stop+=h;else a.run+=h;}
+  for(const h of HM.values()){const key=TT.mode==='wc'?h.n:h.n+'|'+h.day;let a=g.get(key);
+    if(!a){a={wc:h.wc,n:h.n,day:TT.mode==='day'?h.day:null,prod:null,rows:0,days:new Set(),qty:0,run:0,stop:0,stopT:0,hasH:false};g.set(key,a);}
+    a.stopT+=(h.plan-h.run)/60;a.hasH=true;}
   const list=[...g.values()].sort((x,y)=>x.n.localeCompare(y.n)||(x.day||0)-(y.day||0)||String(x.prod||'').localeCompare(String(y.prod||'')));
   const T=list.reduce((s,a)=>({rows:s.rows+a.rows,qty:s.qty+a.qty,run:s.run+a.run,stop:s.stop+a.stop}),{rows:0,qty:0,run:0,stop:0});
   const rawQty=rows.reduce((s,r)=>s+(+r.qty||0),0),rawHrs=rows.reduce((s,r)=>s+(+r.hrs||0),0);
@@ -793,16 +804,19 @@ function prodClusters(rows,thr){rows=rows.filter(r=>!isStop(r)&&K.norm(r.prod));
   return [...g.values()].map(c=>{c.name=[...c.variants.entries()].sort((a,b)=>b[1]-a[1])[0][0];return c;});}
 /* ---------- totals (grouped by department) ---------- */
 function drawTot(){const C=calcTotals(),m=TT.mode,sub=$('#tsub').checked;
-  const cols=['Work center',m==='day'?'اليوم':m==='prod'?'الصنف':null,'القسم','عدد الصفوف','عدد الأيام','إجمالي الكمية','ساعات التشغيل','ساعات التوقف','إجمالي الساعات'].filter(x=>x);
-  const cell=a=>[a.wc].concat(m==='day'?[iso(a.day)]:m==='prod'?[a.prod||'—']:[],[deptOfN(a.n)||'—',a.rows,a.days.size,r2(a.qty),r2(a.run),r2(a.stop),r2(a.run+a.stop)]);
-  const pre=m==='wc'?1:2;const sumRow=(label,arr)=>{const s=arr.reduce((t,a)=>({rows:t.rows+a.rows,qty:t.qty+a.qty,run:t.run+a.run,stop:t.stop+a.stop}),{rows:0,qty:0,run:0,stop:0});
-    return [label].concat(Array(pre).fill(''),[s.rows,'',r2(s.qty),r2(s.run),r2(s.stop),r2(s.run+s.stop)]);};
+  const full=m!=='prod';
+  const cols=['Work center',m==='day'?'اليوم':m==='prod'?'الصنف':null,'القسم','عدد الصفوف','عدد الأيام','إجمالي الكمية','ساعات التشغيل','ساعات التوقف'].concat(full?['منها مسجّل (صفوف توقف)','منها غير مسجّل / تلقائي']:[],['إجمالي الساعات (تشغيل + توقف)']).filter(x=>x);
+  const hv=a=>{const st=a.hasH?a.stopT:a.stop,rec=Math.min(a.stop,st);return {st,rec,oth:Math.max(0,st-rec)};};
+  const tail=a=>{const h=hv(a);return full?[r2(a.run),r2(h.st),r2(h.rec),r2(h.oth),r2(a.run+h.st)]:[r2(a.run),r2(a.stop),r2(a.run+a.stop)];};
+  const cell=a=>[a.wc].concat(m==='day'?[iso(a.day)]:m==='prod'?[a.prod||'—']:[],[deptOfN(a.n)||'—',a.rows,a.days.size,r2(a.qty)],tail(a));
+  const pre=m==='wc'?1:2;const sumRow=(label,arr)=>{const s=arr.reduce((t,a)=>{const h=hv(a);return {rows:t.rows+a.rows,qty:t.qty+a.qty,run:t.run+a.run,stop:t.stop+a.stop,st:t.st+h.st,rec:t.rec+h.rec,oth:t.oth+h.oth};},{rows:0,qty:0,run:0,stop:0,st:0,rec:0,oth:0});
+    return [label].concat(Array(pre).fill(''),[s.rows,'',r2(s.qty)],full?[r2(s.run),r2(s.st),r2(s.rec),r2(s.oth),r2(s.run+s.st)]:[r2(s.run),r2(s.stop),r2(s.run+s.stop)]);};
   const ord=d=>{const i=S.depts.indexOf(d);return i<0?99:i;},by=new Map();C.list.forEach(a=>{const d=deptOfN(a.n)||'—';if(!by.has(d))by.set(d,[]);by.get(d).push(a);});
   const out=[];for(const d of [...by.keys()].sort((x,y)=>ord(x)-ord(y)||x.localeCompare(y))){by.get(d).forEach(a=>out.push({c:cell(a),t:'r'}));if(sub)out.push({c:sumRow('إجمالي '+d,by.get(d)),t:'s'});}
   const tot=sumRow('الإجمالي الكلي',C.list);TT.last={cols,body:out.map(o=>o.c),tot,types:out.map(o=>o.t)};
   const fmt=v=>typeof v==='number'?v.toLocaleString('en-US',{maximumFractionDigits:2}):esc(v);
   $('#ttab').innerHTML=`<thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${out.map(o=>`<tr class="${o.t==='s'?'subr':''}">${o.c.map((v,i)=>`<td class="${i===0?'dn':''}">${fmt(v)}</td>`).join('')}</tr>`).join('')}<tr class="tot">${tot.map((v,i)=>`<td class="${i===0?'dn':''}">${fmt(v)}</td>`).join('')}</tr></tbody>`;
-  $('#tcount').textContent=`${C.list.length} صف في الجدول — من ${C.rows.length} صف بيانات — الأرقام تراكمية للفترة زي ما هي`;
+  $('#tcount').textContent=`${C.list.length} صف في الجدول — من ${C.rows.length} صف بيانات — الأرقام تراكمية للفترة${full?' — ساعات التوقف = المسجّل (صفوف توقف) + غير المسجّل والتلقائي، فالتشغيل + التوقف = الزمن المخطط (الوردية أو الساعات المسجلة لو أكتر)':''}`;
   const ch=runChecks(C),bad=ch.filter(c=>c.level==='warn').length;
   $('#tchk').innerHTML=`<div class="hs ${bad?'warn':'ok'}">${bad?`⚠ ${bad} تنبيه محتاج مراجعة`:'✔ لا يوجد أخطاء في البيانات التي في الفترة دي'}</div>`+ch.map(c=>`<details ${c.level==='warn'&&c.items.length?'open':''} class="chk ${c.level}"><summary>${c.level==='ok'?'✔':c.level==='warn'?'⚠':'ℹ'} ${esc(c.title)}${c.items.length?` — <b>${c.items.length}</b>`:''}</summary>${c.items.length?`<ul class="lst">${c.items.slice(0,60).map(i=>`<li>${esc(i)}</li>`).join('')}${c.items.length>60?`<li class="muted">... و${c.items.length-60} كمان</li>`:''}</ul>`:''}</details>`).join('');
   drawMulti(C.rows);}
@@ -935,8 +949,14 @@ function bindTot(){const set=()=>{TT.from=isoToSer($('#tf').value)||TT.from;TT.t
     $('#tcmpr').innerHTML=`<div class="hs ${bad?'warn':'ok'}">${bad?`⚠ ${bad} مركز عمل فيهم فرق`:'✔ كل الأرقام متطابقة'}</div><div class="tw"><table class="kt"><thead><tr><th>Work center</th><th>كمية (شيتك)</th><th>كمية (البرنامج)</th><th>فرق</th><th>ساعات (شيتك)</th><th>ساعات (البرنامج)</th><th>فرق</th><th>النتيجة</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;};
   drawTot();}
 /* ---------- closing checklist: day by day, per work center (user controls the view) ---------- */
-const CL={dept:'قسم البناطة',mode:'day',day:null,from:null,to:null,wc:'',status:'',q:'',group:'day',limit:40,bar:true,opened:new Map()};
-function closeItems(){const f=S.settings.monthStart,t=R.eom;
+const CL={month:null,dept:'قسم البناطة',mode:'day',day:null,from:null,to:null,wc:'',status:'',q:'',group:'day',limit:40,bar:true,opened:new Map()};
+const calFirst=n=>{const d=K.serToDate(n);return Math.round(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),1)/86400000)+25569;},calEom=n=>{const d=K.serToDate(n);return Math.round(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)/86400000)+25569;};
+function clRange(){const ms=S.settings.monthStart,cur=calFirst(ms),mo=CL.month==null?cur:CL.month,f=mo===cur?ms:mo;return {f,t:calEom(mo),key:String(f),mo,cur};}
+function fillCloseMonths(){const R_=clRange(),mm=new Map();
+  S.data.forEach(r=>{if((r.x&&r.x.draft)||r.day==null)return;const f=calFirst(r.day);if(!mm.has(f))mm.set(f,0);if(deptOfN(K.norm(r.wc))===CL.dept&&!isStop(r)&&K.norm(r.prod))mm.set(f,mm.get(f)+1);});
+  if(!mm.has(R_.mo))mm.set(R_.mo,0);if(!mm.has(R_.cur))mm.set(R_.cur,0);
+  const sel=$('#cmon');if(sel)sel.innerHTML=[...mm.entries()].sort((a,b)=>b[0]-a[0]).map(([f,n])=>`<option value="${f}" ${f===R_.mo?'selected':''}>${iso(f).slice(0,7)} — ${n} بند${f===R_.cur?' (الشهر الحالي)':''}</option>`).join('');}
+function closeItems(){const {f,t}=clRange();
   const rows=S.data.filter(r=>!(r.x&&r.x.draft)&&r.day>=f&&r.day<=t&&deptOfN(K.norm(r.wc))===CL.dept&&!isStop(r)&&K.norm(r.prod));
   const cl=clusterNames([...new Set(rows.map(r=>K.norm(r.prod)))],simThr()),canon=new Map(),m=new Map();
   rows.forEach(r=>{const root=cl.get(K.norm(r.prod));if(!canon.has(root))canon.set(root,new Map());const c=canon.get(root),p=r.prod.trim();c.set(p,(c.get(p)||0)+1);});
@@ -947,7 +967,7 @@ function closeItems(){const f=S.settings.monthStart,t=R.eom;
   return [...m.values()].map(it=>{const e=ent.find(x=>x.day===it.day&&x.wn===it.wn&&x.keys.some(k=>it.keys.has(k)));const cq=e?(+e.q||0):0,tot=e&&e.tot!=null?+e.tot:cq,rem=it.qty-cq;it.ent=e;it.cq=cq;it.rem=Math.max(0,rem);it.held=cq>0?Math.max(0,tot-cq):0;it.newq=cq>0?Math.max(0,it.qty-tot):0;it.reason=(e&&e.reason)||'';it.status=cq<=0.0001?'open':rem>0.0001?'partial':'done';return it;})
     .sort((a,b)=>a.day-b.day||a.wc.localeCompare(b.wc)||a.name.localeCompare(b.name));}
 function viewClose(){return `<div class="card hotc"><h3 style="margin-top:0">إقفال الأصناف — يومًا بيوم لكل مركز عمل</h3>
-  <div class="row"><label>القسم</label><select id="cdp">${DEPTS_ALL.map(d=>`<option ${d===CL.dept?'selected':''}>${esc(d)}</option>`).join('')}</select><label>مركز العمل</label><select id="cwc"></select>
+  <div class="row"><label>الشهر</label><select id="cmon"></select><label>القسم</label><select id="cdp">${DEPTS_ALL.map(d=>`<option ${d===CL.dept?'selected':''}>${esc(d)}</option>`).join('')}</select><label>مركز العمل</label><select id="cwc"></select>
    <label>الفترة</label><select id="cmode"><option value="day">يوم واحد</option><option value="range">من يوم لـ يوم</option><option value="all">كل الشهر</option></select>
    <span id="cdayc" class="row" style="margin:0"><button id="cprev">◀</button><select id="cday"></select><button id="cnext">▶</button></span><span id="crng" class="row" style="margin:0"><input type="date" id="cfrom"><input type="date" id="cto"></span></div>
   <div class="row"><label>الحالة</label><select id="cst"><option value="">الكل</option><option value="todo">التي لم يُقفل (جديد + كمية جديدة)</option><option value="open">لم يُقفل</option><option value="partial">مقفول جزئيًا / فيه كمية جديدة</option><option value="done">تم إقفاله</option></select>
@@ -956,7 +976,7 @@ function viewClose(){return `<div class="card hotc"><h3 style="margin-top:0">إ�
   <div id="cdays" class="dbar"></div><div id="csum" class="hs ok"></div>
   <div class="bar"><button id="ccp">نسخ البنود غير المُقفلة (اليوم / مركز العمل / الصنف / الكمية)</button><button id="call">تحديد المعروض كمُقفل</button><button id="cun">إلغاء تحديد المعروض</button><button id="cfold">طيّ الكل</button><button id="cunfold">فتح الكل</button></div>
   <div id="clist"></div></div>`;}
-function drawClose(){const all=closeItems();CL.all=all;const days=[...new Set(all.map(i=>i.day))].sort((a,b)=>a-b);
+function drawClose(){fillCloseMonths();const all=closeItems();CL.all=all;const days=[...new Set(all.map(i=>i.day))].sort((a,b)=>a-b);
   if(CL.day==null||!days.includes(CL.day))CL.day=days.length?days[days.length-1]:null;
   const wcs=[...new Set(all.map(i=>i.wc))].sort();if(CL.wc&&!wcs.includes(CL.wc))CL.wc='';
   $('#cwc').innerHTML='<option value="">كل مراكز العمل</option>'+wcs.map(w=>`<option ${w===CL.wc?'selected':''}>${esc(w)}</option>`).join('');
@@ -987,10 +1007,10 @@ function drawClose(){const all=closeItems();CL.all=all;const days=[...new Set(al
   $$('#clist [data-gm]').forEach(b=>b.onclick=e=>{e.preventDefault();setClosed(CL.groups[+b.dataset.gm],true);drawClose();toast('✔ تم تحديد المجموعة');});
   $$('#clist details[data-gk]').forEach(d=>d.ontoggle=()=>CL.opened.set(d.dataset.gk,d.open));
   const mb=$('#cmore');if(mb)mb.onclick=()=>{CL.limit+=+$('#clim').value>=9999?0:CL.limit;$('#clim').value=String(CL.limit);drawClose();};}
-function setClosed(items,on){const mk=String(S.settings.monthStart);S.closedD=S.closedD||{};let ent=S.closedD[mk]||(S.closedD[mk]=[]);
+function setClosed(items,on){const mk=clRange().key;S.closedD=S.closedD||{};let ent=S.closedD[mk]||(S.closedD[mk]=[]);
   for(const it of items){if(on){if(it.ent){it.ent.q=it.qty;it.ent.tot=it.qty;it.ent.reason='';it.ent.keys=[...new Set(it.ent.keys.concat([...it.keys]))];}else ent.push({day:it.day,wn:it.wn,wc:it.wc,keys:[...it.keys],q:it.qty,tot:it.qty,name:it.name,at:Date.now()});}
     else ent=S.closedD[mk]=ent.filter(x=>!(x.day===it.day&&x.wn===it.wn&&x.keys.some(k=>it.keys.has(k))));}save();}
-function setClosedQ(it,q,reason){const mk=String(S.settings.monthStart);S.closedD=S.closedD||{};const ent=S.closedD[mk]||(S.closedD[mk]=[]),r=(reason||'').trim();
+function setClosedQ(it,q,reason){const mk=clRange().key;S.closedD=S.closedD||{};const ent=S.closedD[mk]||(S.closedD[mk]=[]),r=(reason||'').trim();
   const i=ent.findIndex(x=>x.day===it.day&&x.wn===it.wn&&x.keys.some(k=>it.keys.has(k))),full=q>=it.qty-1e-9;
   if(q<=0&&!r){if(i>=0)ent.splice(i,1);}else{const o={day:it.day,wn:it.wn,wc:it.wc,keys:i>=0?[...new Set(ent[i].keys.concat([...it.keys]))]:[...it.keys],q:q,tot:it.qty,name:it.name,at:Date.now(),reason:full?'':r};if(i>=0)ent[i]=o;else ent.push(o);}save();}
 function openCloseDlg(it){if(!it||$('#cdlg'))return;const tot=it.qty,cur=it.cq>0?it.cq:0,REAS=['قيد التصنيع / لم يكتمل','في انتظار فحص الجودة','مرفوض / عيوب','لم يُسلَّم للمخزن','نقص خامات','أخرى'];
@@ -1013,7 +1033,7 @@ function openCloseDlg(it){if(!it||$('#cdlg'))return;const tot=it.qty,cur=it.cq>0
   m.onclick=e=>{if(e.target===m)close();};m.onkeydown=e=>{if(e.key==='Escape')close();else if(e.key==='Enter'&&e.target.tagName!=='TEXTAREA'){e.preventDefault();save_();}};
   (q.disabled?$('#cdok',m):q).focus();}
 function bindClose(){const g=id=>$(id),re=()=>{window.scrollTo(window.scrollX,window.scrollY);drawClose();};
-  g('#cdp').onchange=e=>{CL.dept=e.target.value;CL.wc='';CL.day=null;re();};g('#cwc').onchange=e=>{CL.wc=e.target.value;re();};g('#cmode').value=CL.mode;g('#cmode').onchange=e=>{CL.mode=e.target.value;re();};
+  g('#cmon').onchange=e=>{CL.month=+e.target.value;CL.day=null;CL.from=null;CL.to=null;CL.wc='';re();};g('#cdp').onchange=e=>{CL.dept=e.target.value;CL.wc='';CL.day=null;re();};g('#cwc').onchange=e=>{CL.wc=e.target.value;re();};g('#cmode').value=CL.mode;g('#cmode').onchange=e=>{CL.mode=e.target.value;re();};
   g('#cday').onchange=e=>{CL.day=+e.target.value;re();};g('#cprev').onclick=()=>{const d=[...new Set(CL.all.map(i=>i.day))].sort((a,b)=>a-b),i=d.indexOf(CL.day);if(i>0){CL.day=d[i-1];re();}};g('#cnext').onclick=()=>{const d=[...new Set(CL.all.map(i=>i.day))].sort((a,b)=>a-b),i=d.indexOf(CL.day);if(i<d.length-1){CL.day=d[i+1];re();}};
   g('#cfrom').value=CL.from?iso(CL.from):'';g('#cto').value=CL.to?iso(CL.to):'';g('#cfrom').onchange=e=>{CL.from=isoToSer(e.target.value);re();};g('#cto').onchange=e=>{CL.to=isoToSer(e.target.value);re();};
   g('#cst').value=CL.status;g('#cst').onchange=e=>{CL.status=e.target.value;re();};g('#cgr').value=CL.group;g('#cgr').onchange=e=>{CL.group=e.target.value;re();};g('#clim').value=String(CL.limit);g('#clim').onchange=e=>{CL.limit=+e.target.value;re();};
@@ -1078,6 +1098,7 @@ function buildReport(){const d=S.settings.selDay,sheets=[],stamp='مولّد م�
   ['Work center','القسم','عدد الصفوف','عدد الأيام','إجمالي الكمية','ساعات التشغيل','ساعات التوقف','إجمالي الساعات'].forEach((t,i)=>T.set(4,1+i,t,'hdr'));T.heights[4]=34;
   const f=S.settings.monthStart,t=R.validDays.length?R.validDays[R.validDays.length-1]:R.eom;const rows=S.data.filter(x=>!(x.x&&x.x.draft)&&x.day>=f&&x.day<=t),g=new Map();
   for(const x of rows){const k=K.norm(x.wc);let a=g.get(k);if(!a){a={wc:x.wc,dept:deptOfN(k)||'—',rows:0,days:new Set(),qty:0,run:0,stop:0};g.set(k,a);}a.rows++;a.days.add(x.day);a.qty+=+x.qty||0;if(isStop(x))a.stop+=+x.hrs||0;else a.run+=+x.hrs||0;}
+  {const HM=hoursMap(f,t,'');const add=new Map();for(const h of HM.values())add.set(h.n,(add.get(h.n)||0)+(h.plan-h.run)/60);for(const [n,st] of add){let a=g.get(n);if(!a){a={wc:(HM.get([...HM.keys()].find(k=>k.startsWith(n+'|')))||{}).wc||n,dept:deptOfN(n)||'—',rows:0,days:new Set(),qty:0,run:0,stop:0};g.set(n,a);}a.stop=Math.max(st,a.stop);}}
   const ord=dp=>{const i=S.depts.indexOf(dp);return i<0?99:i;},by=new Map();[...g.values()].forEach(a=>{if(!by.has(a.dept))by.set(a.dept,[]);by.get(a.dept).push(a);});let rr=5;const gt={rows:0,qty:0,run:0,stop:0};
   for(const dp of [...by.keys()].sort((a,b)=>ord(a)-ord(b)||a.localeCompare(b))){const arr=by.get(dp).sort((a,b)=>a.wc.localeCompare(b.wc));const s={rows:0,qty:0,run:0,stop:0};
     for(const a of arr){T.set(rr,1,a.wc,'txt').set(rr,2,a.dept,'txt').set(rr,3,a.rows,'num2').set(rr,4,a.days.size,'num2').set(rr,5,r2(a.qty),'num2').set(rr,6,r2(a.run),'num2').set(rr,7,r2(a.stop),'num2').set(rr,8,r2(a.run+a.stop),'num2');s.rows+=a.rows;s.qty+=a.qty;s.run+=a.run;s.stop+=a.stop;rr++;}
