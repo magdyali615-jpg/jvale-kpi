@@ -187,7 +187,7 @@ function compute(S){
   const mapIdx=new Map(), dup=new Set();
   S.map.forEach((m,i)=>{const n=norm(m.name); if(!n) return; if(mapIdx.has(n)) dup.add(n); else mapIdx.set(n,i);});
   const start=st.monthStart, eom=eomonth(start), days=[]; for(let d=start; d<=Math.min(start+30,eom); d++) days.push(d);
-  const off=new Set(S.daysOff||[]); const thr=Math.max(1,st.thr||1);
+  const off=new Set(S.daysOff||[]), wk=new Set(Array.isArray(st.weekOff)?st.weekOff:[5,6]); const thr=Math.max(1,st.thr||1);
   const exl=(S.excl||[]).filter(e=>e.wc).map(e=>({w:norm(e.wc),lo:e.from==null?-1e9:e.from,hi:(e.from==null&&e.to==null)?1e9:(e.to==null?e.from:e.to)}));
   const theo=+st.theo||0, kw=norm(st.kw), frRule=st.frOn&&kw!=='';
   const recs=[], dayPlan=new Map();
@@ -196,10 +196,9 @@ function compute(S){
     const ovr=+m.ovr>0?+m.ovr:0;
     for(const d of days){
       const rows=by.get(key(w,d)); const exAny=(m.inc==='لا')||exl.some(e=>e.w===w&&e.lo<=d&&d<=e.hi);
-      let rec={wc:m.name,dept:m.dept||'',day:d,plan:0,run:0,ideal:0,qty:0,cap:0,hasRows:!!rows,excluded:false,auto:false,noKpi:m.kpi==='لا',reason:''};
+      let rec={wc:m.name,dept:m.dept||'',day:d,plan:0,run:0,ideal:0,qty:0,cap:0,hasRows:!!rows,excluded:false,auto:false,noKpi:exAny,reason:exAny?((m.inc==='لا')?'خارج المؤشرات (يدخل في حساب المؤشرات = لا)':'خارج المؤشرات بتاريخ (KPI Exclusions)'):''};
       if(rows){
-        if(exAny){rec.excluded=true;rec.reason=(m.inc==='لا')?'مستبعد من الخريطة (لا)':'مستبعد بتاريخ (KPI Exclusions)';}
-        else{
+        {
           let L=0,S_=0,idealSec=0,q=0,qk=0;
           for(const r of rows){const h=+r.hrs||0; L+=h; if(norm(r.prod).startsWith('توقف')) S_+=h; idealSec+=(+r.qty||0)*(+r.cyc||0); q+=(+r.qty||0); if(frRule&&norm(r.prod).includes(kw)) qk+=(+r.qty||0);}
           const run=(L-S_)*60, plan=ovr>0?Math.max(ovr,run):Math.max(st.shift,L*60);
@@ -207,7 +206,7 @@ function compute(S){
           if(frRule&&m.dept==='قسم الثلاجات'){qty=qk;basis=qk*theo*60;}
           rec.plan=plan;rec.run=run;rec.ideal=idealSec/60;rec.qty=qty;rec.cap=basis>0?qty*plan*60/basis:0;
         }
-      } else if(st.autoStop&&!exAny&&(dayCount.get(d)||0)>=thr&&!off.has(d)){
+      } else if(st.autoStop&&(dayCount.get(d)||0)>=thr&&!off.has(d)&&!wk.has(serToDate(d).getUTCDay())){
         rec.auto=true; rec.plan=ovr>0?ovr:st.shift;
       }
       recs.push(rec); if(!rec.noKpi)dayPlan.set(d,(dayPlan.get(d)||0)+rec.plan);
@@ -224,7 +223,7 @@ function compute(S){
   const unmapped=[...names.entries()].filter(([k])=>!mapIdx.has(k)).map(([k,v])=>v);
   let rowsMonth=0,rowsMapped=0; for(const r of S.data){ if(r.day>=start&&r.day<=eom){rowsMonth++; if(mapIdx.has(norm(r.wc))) rowsMapped++;} }
   return {days,validDays,recs,dayTable,monthTable,log,unmapped,rowsMonth,rowsMapped,dup:[...dup],
-    autoList:recs.filter(r=>r.auto),exList:recs.filter(r=>r.excluded),nameInfo:names,mapIdx,eom,dayCount};
+    autoList:recs.filter(r=>r.auto),exList:recs.filter(r=>r.noKpi&&r.hasRows),nameInfo:names,mapIdx,eom,dayCount};
 }
 const api={compute,norm,round1,serToISO,isoToSer,serToDate,eomonth};
 if(typeof module!=='undefined') module.exports=api; else root.KPI=api;
@@ -304,7 +303,7 @@ function viewKpi(){
   h+=viewDash(d);h+=`<div class="card"><h3>① بيانات اليوم المختار — ${LT(iso(d))} (انسخها في جدول الإدخال اليومي)</h3>${copyBar()}${kpiTable(R.dayTable(d),'t1')}</div>`;
   h+=viewMonth();h+=`<details class="card"><summary><b>تراكمي الشهر بطريقة الإكسل (المجموع ÷ المجموع) — للمرجع</b></summary><div class="bar"><button data-cpm="all">نسخ الجدول</button></div>${kpiTable(R.monthTable(),'t2')}</details>`;
   const ex=R.exList.filter(r=>r.day===d), au=R.autoList.filter(r=>r.day===d&&!r.noKpi);
-  h+=`<div class="grid2"><div class="card"><h3>ماكينات ليها بيانات اليوم واستُبعدت (${ex.length})</h3>${ex.length?`<ul class="lst">${ex.map(r=>`<li><b>${esc(r.wc)}</b> <span class="muted">${esc(r.dept)} — ${esc(r.reason)}</span></li>`).join('')}</ul>`:'<p class="muted">لا يوجد</p>'}</div>
+  h+=`<div class="grid2"><div class="card"><h3>ماكينات ليها بيانات اليوم وخارج حساب المؤشرات (${ex.length})</h3>${ex.length?`<ul class="lst">${ex.map(r=>`<li><b>${esc(r.wc)}</b> <span class="muted">${esc(r.dept)} — ${esc(r.reason)}</span></li>`).join('')}</ul>`:'<p class="muted">لا يوجد</p>'}</div>
    <div class="card"><h3>④ ماكينات غير مسجلة في Data اليوم — احتُسبت متوقفة (${au.length})</h3>${au.length?`<ul class="lst">${au.map(r=>`<li><b>${esc(r.wc)}</b> <span class="muted">${esc(r.dept)} — ${fn(r.plan)} دقيقة مخططة، تشغيل 0</span></li>`).join('')}</ul>`:'<p class="muted">لا يوجد</p>'}</div></div>`;
   return h;}
 function bindKpi(){if(S.settings.selDay!=null)bindDash();bindMonth();
@@ -419,79 +418,85 @@ function bindLog(){const draw=()=>{const rows=logRows();let h=`<div class="tw"><
   ['#fd','#ff','#ft'].forEach(s=>$(s).onchange=draw);draw();bindCopy($('#view'),logRows,true);
   $('#xl').onclick=()=>{const rows=logRows();const hd=['التاريخ','القسم','حجم الإنتاج الفعلي','الطاقة القصوى','استغلال الطاقة %','الزمن المثالي','زمن التشغيل','الأداء %','زمن التشغيل','الزمن المخطط','التوافر %'];
     const aoa=[hd].concat(rows.map(r=>[iso(r.day),r.dept,r.qty,r.cap,r.u,r.ideal,r.run,r.p,r.run2,r.plan,r.a]));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'KPI Daily Log');saveXlsx(wb,'KPI_Daily_Log.xlsx');};}
-/* ---------- downtime hours per machine: daily matrix + monthly totals, measured against the shift ---------- */
-const DT={from:null,to:null,dept:'',q:'',unit:'h',reason:'all',sort:'stop',hz:false,top:10,kf:'all'};
+/* ---------- downtime hours for EVERY work center of the plant: daily matrix + monthly totals, measured against the shift ---------- */
+const WEEKN=['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'],weekOffSet=()=>new Set(Array.isArray(S.settings.weekOff)?S.settings.weekOff:[5,6]);
+const DT={from:null,to:null,dept:'',q:'',unit:'h',show:'stop',reason:'all',sort:'stop',hz:false,top:10};
 const WDL=['ح','ن','ث','ر','خ','ج','س'],d1=v=>(Math.round(v*10)/10).toLocaleString('en-US',{maximumFractionDigits:1}),d2=v=>(Math.round(v*100)/100).toLocaleString('en-US',{maximumFractionDigits:2});
 function dtInit(){if(DT.from==null||DT.to==null){DT.from=S.settings.monthStart;DT.to=R.validDays.length?R.validDays[R.validDays.length-1]:R.eom;}}
-function dtCalc(){dtInit();const sm=new Map();
+function dtCalc(){dtInit();const sm=new Map(),shift=+S.settings.shift||480;
   for(const r of S.data){if((r.x&&r.x.draft)||!isStop(r))continue;const k=K.norm(r.wc)+'|'+r.day;sm.set(k,(sm.get(k)||0)+(+r.hrs||0));}
   const qn=K.norm(DT.q),mm=new Map(),dset=new Set();
-  for(const r of R.recs){if(r.excluded||!(r.plan>0)||r.day<DT.from||r.day>DT.to)continue;if(DT.dept&&r.dept!==DT.dept)continue;if(qn&&!K.norm(r.wc).includes(qn))continue;if(DT.kf==='in'&&r.noKpi)continue;if(DT.kf==='out'&&!r.noKpi)continue;
-    const n=K.norm(r.wc);let m=mm.get(n);if(!m){m={wc:r.wc,noKpi:!!r.noKpi,dept:r.dept||'غير مُسند',days:new Map(),plan:0,v:0,stop:0,rec:0,oth:0,nd:0,nstop:0,worst:null};mm.set(n,m);}
+  const put=(r,unm)=>{if(!(r.plan>0)||r.day<DT.from||r.day>DT.to)return;if(DT.dept&&r.dept!==DT.dept)return;if(qn&&!K.norm(r.wc).includes(qn))return;
+    const n=K.norm(r.wc);let m=mm.get(n);if(!m){m={wc:r.wc,unm:!!unm,dept:r.dept||'غير مُسند',days:new Map(),plan:0,run:0,v:0,stop:0,rec:0,oth:0,nd:0,nstop:0,worst:null};mm.set(n,m);}
     const stop=Math.max(0,r.plan-r.run),rec=Math.min((sm.get(n+'|'+r.day)||0)*60,stop),oth=stop-rec,v=DT.reason==='rec'?rec:DT.reason==='oth'?oth:stop;
-    m.days.set(r.day,{plan:r.plan,stop,rec,oth,v,auto:r.auto});m.plan+=r.plan;m.v+=v;m.stop+=stop;m.rec+=rec;m.oth+=oth;m.nd++;if(v>0.01)m.nstop++;if(!m.worst||v>m.worst.v)m.worst={d:r.day,v};dset.add(r.day);}
+    m.days.set(r.day,{plan:r.plan,run:Math.max(0,r.run),stop,rec,oth,v,auto:r.auto});m.plan+=r.plan;m.run+=Math.max(0,r.run);m.v+=v;m.stop+=stop;m.rec+=rec;m.oth+=oth;m.nd++;if(v>0.01)m.nstop++;if(!m.worst||v>m.worst.v)m.worst={d:r.day,v};dset.add(r.day);};
+  R.recs.forEach(r=>put(r,false));
+  const un=new Set(R.unmapped.map(u=>K.norm(u.name)));
+  if(un.size){const g=new Map();for(const r of S.data){if(r.x&&r.x.draft)continue;const n=K.norm(r.wc);if(!un.has(n)||r.day==null)continue;const k=n+'|'+r.day;let a=g.get(k);if(!a)g.set(k,a={wc:String(r.wc),day:r.day,L:0,S:0});const h=+r.hrs||0;a.L+=h;if(isStop(r))a.S+=h;}
+    g.forEach(a=>put({wc:a.wc,dept:'غير مُسند',day:a.day,plan:Math.max(shift,a.L*60),run:(a.L-a.S)*60,auto:false},true));}
   let ms=[...mm.values()];const all=ms.length;if(DT.hz)ms=ms.filter(m=>m.v>0.01);
   const so=d=>{const i=S.depts.indexOf(d);return i<0?99:i;};
   ms.sort(DT.sort==='name'?(a,b)=>a.wc.localeCompare(b.wc):DT.sort==='dept'?(a,b)=>so(a.dept)-so(b.dept)||b.v-a.v||a.wc.localeCompare(b.wc):(a,b)=>b.v-a.v||a.wc.localeCompare(b.wc));
   const days=[...dset].sort((a,b)=>a-b),dtot=new Map();ms.forEach(m=>m.days.forEach((c,d)=>dtot.set(d,(dtot.get(d)||0)+c.v)));
   const sum=k=>ms.reduce((s,m)=>s+m[k],0);
-  return {ms,all,days,dtot,plan:sum('plan'),v:sum('v'),rec:sum('rec'),oth:sum('oth'),shift:+S.settings.shift||480};}
-function viewDT(){dtInit();return `<div class="card hotc"><h3>ساعات التوقف لكل ماكينة — يوم بيوم وإجمالي الشهر (مقارنة بالوردية)</h3>
+  return {ms,all,days,dtot,plan:sum('plan'),run:sum('run'),v:sum('v'),stop:sum('stop'),rec:sum('rec'),oth:sum('oth'),shift,unm:ms.filter(m=>m.unm).length};}
+function viewDT(){dtInit();return `<div class="card hotc"><h3>ساعات التشغيل والتوقف لكل مركز عمل في المصنع — يوم بيوم وإجمالي الشهر (مقارنة بالوردية)</h3>
   <div class="row"><label>من</label><input type="date" id="dtf" value="${iso(DT.from)}"><label>إلى</label><input type="date" id="dtt" value="${iso(DT.to)}"><button id="dtm">الشهر كله</button><button id="dtd">اليوم المختار</button>
    <label>القسم</label><select id="dtdp"><option value="">كل الأقسام</option>${S.depts.map(d=>`<option>${esc(d)}</option>`).join('')}</select><input id="dtq" placeholder="🔍 بحث بالماكينة" style="width:170px" value="${esc(DT.q)}"></div>
-  <div class="row"><label>الخلايا بـ</label><select id="dtu"><option value="h">ساعات</option><option value="m">دقائق</option><option value="p">% من الوردية</option></select><label>مصدر التوقف</label><select id="dtr"><option value="all">كل التوقف</option><option value="rec">المسجّل في Data بس (صفوف توقف)</option><option value="oth">غير المسجّل (فرق الوردية + التوقف التلقائي)</option></select>
-   <label>ترتيب الماكينات</label><select id="dts"><option value="stop">الأكتر توقفًا</option><option value="dept">حسب القسم</option><option value="name">الاسم</option></select><label>أكبر</label><select id="dtn"><option>5</option><option>10</option><option>20</option><option value="999">الكل</option></select><label>مراكز العمل</label><select id="dtk"><option value="all">الكل (حتى الخارجة من المؤشرات)</option><option value="in">الداخلة في المؤشرات بس</option><option value="out">الخارجة من المؤشرات بس</option></select><label><input type="checkbox" id="dthz"> إخفاء اللي مفيش عليها توقف</label>
+  <div class="row"><label>الخلايا بـ</label><select id="dtu"><option value="h">ساعات</option><option value="m">دقائق</option><option value="p">% من الوردية</option></select><label>المعروض في الجدول اليومي</label><select id="dtsh"><option value="stop">التوقف</option><option value="run">التشغيل</option><option value="both">التشغيل / التوقف</option></select><label>مصدر التوقف</label><select id="dtr"><option value="all">كل التوقف</option><option value="rec">المسجّل في Data بس (صفوف توقف)</option><option value="oth">غير المسجّل (فرق الوردية + التوقف التلقائي)</option></select>
+   <label>ترتيب الماكينات</label><select id="dts"><option value="stop">الأكتر توقفًا</option><option value="dept">حسب القسم</option><option value="name">الاسم</option></select><label>أكبر</label><select id="dtn"><option>5</option><option>10</option><option>20</option><option value="999">الكل</option></select><label><input type="checkbox" id="dthz"> إخفاء اللي مفيش عليها توقف</label>
    <button id="dtcp">نسخ الجدول</button><button id="dtxl">تصدير Excel</button></div>
-  <p class="muted">التوقف = الزمن المخطط − زمن التشغيل (نفس حساب التوافر في البرنامج). الزمن المخطط هو الوردية (${d2((+S.settings.shift||480)/60)} ساعة) أو ساعات التسجيل لو أكتر. «مسجّل» = صفوف التوقف في Data، مراكز العمل المعلّمة «خارج المؤشرات» ظاهرة هنا ومحسوبة في التوقف (بس مش في الاستغلال والأداء والتوافر). و«غير مسجّل» = فرق الوردية عن الساعات المسجلة + الماكينة اللي ما اتسجلتش في يوم شغل (توقف تلقائي).</p><div id="dtout"></div></div>`;}
+  <p class="muted">بيعرض <b>كل مراكز عمل المصنع</b> من الداتا اللي بتدخلها، من غير ما يفرق هل المركز داخل في حساب المؤشرات ولا لا. التوقف = الزمن المخطط − زمن التشغيل (نفس حساب التوافر). الزمن المخطط هو الوردية (${d2((+S.settings.shift||480)/60)} ساعة) أو ساعات التسجيل لو أكتر. «مسجّل» = صفوف التوقف في Data، و«غير مسجّل» = فرق الوردية عن الساعات المسجلة + المركز اللي ما اتسجلش في يوم شغل (بيتحسب توقف تلقائي). يوم الشغل = يوم فيه تسجيل كفاية على المصنع، ومش إجازة أسبوعية ولا يوم إجازة محدد (من الإعدادات).</p><div id="dtout"></div></div>`;}
 function drawDT(){const C=dtCalc(),o=$('#dtout');
-  if(!C.all){o.innerHTML='<div class="hs warn">لا يوجد بيانات توقف في الفترة والفلاتر دي — راجع الفترة أو القسم، أو أن مراكز العمل مسجلة في تبويب «مراكز العمل»</div>';DT.last=null;return;}
-  const {ms,days,dtot,shift}=C,u=DT.unit,hrs=m=>m/60;
-  const cellTxt=(v,plan)=>u==='h'?d1(v/60):u==='m'?String(Math.round(v)):d1(plan?v/plan*100:0)+'%';
-  const totTxt=(v,plan)=>u==='h'?d2(v/60):u==='m'?String(Math.round(v)):d1(plan?v/plan*100:0)+'%';
+  if(!C.all){o.innerHTML='<div class="hs warn">لا يوجد بيانات في الفترة والفلاتر دي — راجع الفترة أو القسم، أو أن مراكز العمل مسجلة في تبويب «مراكز العمل»</div>';DT.last=null;return;}
+  const {ms,days,dtot,shift}=C,u=DT.unit,sh=DT.show,hrs=m=>m/60;
+  const f=(x,plan)=>u==='h'?d1(x/60):u==='m'?String(Math.round(x)):d1(plan?x/plan*100:0)+'%';
+  const ft=(x,plan)=>u==='h'?d2(x/60):f(x,plan);
+  const pick=(run,v,plan,fn)=>sh==='both'?fn(run,plan)+' / '+fn(v,plan):fn(sh==='run'?run:v,plan);
+  const cellTxt=c=>pick(c.run,c.v,c.plan,f),totTxt=(run,v,plan)=>pick(run,v,plan,ft);
   const worstM=ms.slice().sort((a,b)=>b.v-a.v)[0],worstD=[...dtot.entries()].sort((a,b)=>b[1]-a[1])[0],aff=ms.filter(m=>m.nstop).length;
   const tile=(n,l,sub)=>`<div class="tile"><b>${n}</b><span>${l}</span>${sub?`<span class="muted"> ${sub}</span>`:''}</div>`;
-  const tiles=`<div class="trk-sum">${tile(d2(hrs(C.v)),'إجمالي ساعات التوقف')}${tile(d1(C.plan?C.v/C.plan*100:0)+'%','من الزمن المخطط')}${tile(d1(C.v/shift),'وردية ضايعة','(الوردية '+d2(shift/60)+' س)')}${tile(aff+' / '+C.all,'ماكينات فيها توقف')}${tile(worstM&&worstM.v>0?esc(worstM.wc):'—','أكتر ماكينة توقفًا',worstM&&worstM.v>0?d2(hrs(worstM.v))+' س':'')}${tile(worstD&&worstD[1]>0?iso(worstD[0]).slice(5):'—','أسوأ يوم',worstD&&worstD[1]>0?d2(hrs(worstD[1]))+' س':'')}</div>`;
-  /* ranking bars */
+  const tiles=`<div class="trk-sum">${tile(d2(hrs(C.v)),'إجمالي ساعات التوقف')}${tile(d2(hrs(C.run)),'إجمالي ساعات التشغيل')}${tile(d1(C.plan?C.v/C.plan*100:0)+'%','توقف من الزمن المخطط')}${tile(d1(C.v/shift),'وردية ضايعة','(الوردية '+d2(shift/60)+' س)')}${tile(aff+' / '+C.all,'مراكز فيها توقف')}${tile(worstM&&worstM.v>0?esc(worstM.wc):'—','أكتر مركز توقفًا',worstM&&worstM.v>0?d2(hrs(worstM.v))+' س':'')}${tile(worstD&&worstD[1]>0?iso(worstD[0]).slice(5):'—','أسوأ يوم',worstD&&worstD[1]>0?d2(hrs(worstD[1]))+' س':'')}</div>`;
+  const unmNote=C.unm?`<div class="hs warn">⚠ ${C.unm} مركز عمل موجود في Data ومش موجود في تبويب «مراكز العمل» — ظاهر هنا تحت «غير مُسند» (مفيش توقف تلقائي ليه لأن مش معروف هل هو شغال)</div>`:'';
   const top=ms.slice().sort((a,b)=>b.v-a.v).filter(m=>m.v>0.01).slice(0,+DT.top),mx=Math.max(1,...top.map(m=>m.v));
   const seg=m=>DT.reason==='rec'?[m.rec,0]:DT.reason==='oth'?[0,m.oth]:[m.rec,m.oth];
-  const bars=top.length?`<h4>ترتيب الماكينات حسب ساعات التوقف <span class="muted"><span class="lg r"></span> مسجّل في Data <span class="lg a"></span> غير مسجّل / تلقائي</span></h4><div class="rk">${top.map((m,i)=>{const [a,b]=seg(m);return `<div class="rkr"><span class="rkn">${i+1}. ${esc(m.wc)} <small class="muted">${esc(m.dept)}</small></span><span class="bar2"><i class="sg1" style="width:${a/mx*100}%"></i><i class="sg2" style="width:${b/mx*100}%"></i></span><b>${d2(hrs(m.v))} س</b><small class="muted">${d1(m.plan?m.v/m.plan*100:0)}%</small></div>`;}).join('')}</div>`:'<div class="hs ok">✔ لا يوجد توقف في الفترة دي</div>';
-  /* monthly summary per machine */
-  const hd=['#','الماكينة','القسم','أيام مخططة','أيام فيها توقف','ساعات مخططة','ساعات التوقف','% من المخطط','وردية ضايعة','متوسط توقف/يوم (س)','مسجّل في Data (س)','غير مسجّل / تلقائي (س)','التوافر %','أسوأ يوم'];
-  const sRow=(m,i)=>[i,m.wc+(m.noKpi?' (خارج المؤشرات)':''),m.dept,m.nd,m.nstop,d2(hrs(m.plan)),d2(hrs(m.v)),d1(m.plan?m.v/m.plan*100:0)+'%',d1(m.v/shift),d2(m.nd?hrs(m.v)/m.nd:0),d2(hrs(m.rec)),d2(hrs(m.oth)),d1(m.plan?(m.plan-m.stop)/m.plan*100:0)+'%',m.worst&&m.worst.v>0?iso(m.worst.d).slice(5)+' ('+d2(hrs(m.worst.v))+' س)':'—'];
+  const bars=top.length?`<h4>ترتيب مراكز العمل حسب ساعات التوقف <span class="muted"><span class="lg r"></span> مسجّل في Data <span class="lg a"></span> غير مسجّل / تلقائي</span></h4><div class="rk">${top.map((m,i)=>{const [a,b]=seg(m);return `<div class="rkr"><span class="rkn">${i+1}. ${esc(m.wc)} <small class="muted">${esc(m.dept)}</small></span><span class="bar2"><i class="sg1" style="width:${a/mx*100}%"></i><i class="sg2" style="width:${b/mx*100}%"></i></span><b>${d2(hrs(m.v))} س</b><small class="muted">${d1(m.plan?m.v/m.plan*100:0)}%</small></div>`;}).join('')}</div>`:'<div class="hs ok">✔ لا يوجد توقف في الفترة دي</div>';
+  const hd=['#','مركز العمل','القسم','أيام مخططة','أيام فيها توقف','ساعات مخططة','ساعات التشغيل','ساعات التوقف','% توقف','% تشغيل (التوافر)','وردية ضايعة','متوسط توقف/يوم (س)','مسجّل في Data (س)','غير مسجّل / تلقائي (س)','أسوأ يوم'];
+  const sRow=(m,i)=>[i,m.wc,m.dept,m.nd,m.nstop,d2(hrs(m.plan)),d2(hrs(m.run)),d2(hrs(m.v)),d1(m.plan?m.v/m.plan*100:0)+'%',d1(m.plan?m.run/m.plan*100:0)+'%',d1(m.v/shift),d2(m.nd?hrs(m.v)/m.nd:0),d2(hrs(m.rec)),d2(hrs(m.oth)),m.worst&&m.worst.v>0?iso(m.worst.d).slice(5)+' ('+d2(hrs(m.worst.v))+' س)':'—'];
   const grp=DT.sort==='dept';const sb=[];let cur=null,agg=null;
-  const flush=()=>{if(agg)sb.push({t:'s',c:['','إجمالي '+cur,'',agg.nd,agg.ns,d2(hrs(agg.plan)),d2(hrs(agg.v)),d1(agg.plan?agg.v/agg.plan*100:0)+'%',d1(agg.v/shift),'',d2(hrs(agg.rec)),d2(hrs(agg.oth)),d1(agg.plan?(agg.plan-agg.stop)/agg.plan*100:0)+'%','']});};
-  ms.forEach((m,i)=>{if(grp&&m.dept!==cur){flush();cur=m.dept;agg={nd:0,ns:0,plan:0,v:0,rec:0,oth:0,stop:0};}
-    if(grp){agg.nd+=m.nd;agg.ns+=m.nstop;agg.plan+=m.plan;agg.v+=m.v;agg.rec+=m.rec;agg.oth+=m.oth;agg.stop+=m.stop;}sb.push({t:'r',c:sRow(m,i+1),v:m.v/(m.plan||1)});});
+  const aRow=(label,g)=>['',label,'',g.nd,g.ns,d2(hrs(g.plan)),d2(hrs(g.run)),d2(hrs(g.v)),d1(g.plan?g.v/g.plan*100:0)+'%',d1(g.plan?g.run/g.plan*100:0)+'%',d1(g.v/shift),'',d2(hrs(g.rec)),d2(hrs(g.oth)),''];
+  const flush=()=>{if(agg)sb.push({t:'s',c:aRow('إجمالي '+cur,agg)});};
+  ms.forEach((m,i)=>{if(grp&&m.dept!==cur){flush();cur=m.dept;agg={nd:0,ns:0,plan:0,run:0,v:0,rec:0,oth:0};}
+    if(grp){agg.nd+=m.nd;agg.ns+=m.nstop;agg.plan+=m.plan;agg.run+=m.run;agg.v+=m.v;agg.rec+=m.rec;agg.oth+=m.oth;}sb.push({t:'r',c:sRow(m,i+1),v:m.v/(m.plan||1)});});
   if(grp)flush();
-  const tstop=ms.reduce((s,m)=>s+m.stop,0);
-  sb.push({t:'t',c:['','الإجمالي','',ms.reduce((s,m)=>s+m.nd,0),ms.reduce((s,m)=>s+m.nstop,0),d2(hrs(C.plan)),d2(hrs(C.v)),d1(C.plan?C.v/C.plan*100:0)+'%',d1(C.v/shift),'',d2(hrs(C.rec)),d2(hrs(C.oth)),d1(C.plan?(C.plan-tstop)/C.plan*100:0)+'%','']});
-  const heat=x=>x>0.02?`style="background:rgba(179,38,30,${Math.min(.2+x*.55,.7).toFixed(2)})"`:'';
-  const sumHtml=`<h4>إجمالي الشهر لكل ماكينة</h4><div class="tw"><table class="kt"><thead><tr>${hd.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${sb.map(o=>`<tr class="${o.t==='s'?'subr':o.t==='t'?'tot':''}">${o.c.map((v,i)=>`<td class="${i===1?'dn':''}" ${i===7&&o.t==='r'?heat(o.v):''}>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-  /* daily matrix */
-  const mh=['الماكينة','القسم'].concat(days.map(d=>iso(d).slice(8)),['الإجمالي']);
-  const cellOf=(m,d)=>{const c=m.days.get(d);return c?c:null;};
+  sb.push({t:'t',c:aRow('الإجمالي',{nd:ms.reduce((s,m)=>s+m.nd,0),ns:ms.reduce((s,m)=>s+m.nstop,0),plan:C.plan,run:C.run,v:C.v,rec:C.rec,oth:C.oth})});
+  const heat=x=>x>0.02?`style="background:rgba(179,38,30,${Math.min(.2+x*.55,.7).toFixed(2)})"`:'',heatG=x=>x>0.02?`style="background:rgba(21,128,61,${Math.min(.15+x*.5,.6).toFixed(2)})"`:'';
+  const sumHtml=`<h4>إجمالي الشهر لكل مركز عمل</h4><div class="tw"><table class="kt"><thead><tr>${hd.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${sb.map(o=>`<tr class="${o.t==='s'?'subr':o.t==='t'?'tot':''}">${o.c.map((v,i)=>`<td class="${i===1?'dn':''}" ${i===8&&o.t==='r'?heat(o.v):''}>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   const mrows=[];let cur2=null;
-  const dsub=(label,list)=>({t:'s',c:[label,''].concat(days.map(d=>{let s=0,p=0;list.forEach(m=>{const c=m.days.get(d);if(c){s+=c.v;p+=c.plan;}});return p?cellTxt(s,p):'';}),[totTxt(list.reduce((s,m)=>s+m.v,0),list.reduce((s,m)=>s+m.plan,0))])});
+  const dsum=(list,d)=>{let s=0,r=0,p=0;list.forEach(m=>{const c=m.days.get(d);if(c){s+=c.v;r+=c.run;p+=c.plan;}});return p?totTxt0(r,s,p):'';};
+  const totTxt0=(r,s,p)=>pick(r,s,p,f);
+  const dsub=(label,list)=>({t:'s',c:[label,''].concat(days.map(d=>dsum(list,d)),[totTxt(list.reduce((s,m)=>s+m.run,0),list.reduce((s,m)=>s+m.v,0),list.reduce((s,m)=>s+m.plan,0))])});
   ms.forEach((m,i)=>{if(grp&&m.dept!==cur2){if(cur2!==null)mrows.push(dsub('إجمالي '+cur2,ms.filter(x=>x.dept===cur2)));cur2=m.dept;}
-    mrows.push({t:'r',m,c:[m.wc+(m.noKpi?' (خارج المؤشرات)':''),m.dept].concat(days.map(d=>{const c=cellOf(m,d);return c?cellTxt(c.v,c.plan):'';}),[totTxt(m.v,m.plan)])});});
+    mrows.push({t:'r',m,c:[m.wc,m.dept].concat(days.map(d=>{const c=m.days.get(d);return c?cellTxt(c):'';}),[totTxt(m.run,m.v,m.plan)])});});
   if(grp&&cur2!==null)mrows.push(dsub('إجمالي '+cur2,ms.filter(x=>x.dept===cur2)));
-  mrows.push({t:'t',c:['الإجمالي',''].concat(days.map(d=>{let s=0,p=0;ms.forEach(m=>{const c=m.days.get(d);if(c){s+=c.v;p+=c.plan;}});return p?cellTxt(s,p):'';}),[totTxt(C.v,C.plan)])});
-  const thDay=d=>{const w=K.serToDate(d).getUTCDay();return `<th class="${w===5||w===6?'we':''}">${+iso(d).slice(8)}<br><small>${WDL[w]}</small></th>`;};
-  const mat=`<h4>يوم بيوم <span class="muted">(${u==='h'?'ساعات توقف':u==='m'?'دقائق توقف':'% من الوردية'} — اللون الأحمر أغمق = توقف أكتر من الوردية — الخلية المخططة <span class="lg au"></span> = توقف تلقائي (مش مسجّلة في Data))</span></h4>
-   <div class="tw dtm"><table class="kt"><thead><tr><th>الماكينة</th><th>القسم</th>${days.map(thDay).join('')}<th>الإجمالي</th></tr></thead><tbody>${mrows.map(o=>`<tr class="${o.t==='s'?'subr':o.t==='t'?'tot':''}">${o.c.map((v,i)=>{if(i<2||i===o.c.length-1)return `<td class="${i===0?'dn':''}">${esc(v)}</td>`;
+  mrows.push({t:'t',c:['الإجمالي',''].concat(days.map(d=>dsum(ms,d)),[totTxt(C.run,C.v,C.plan)])});
+  const thDay=d=>{const w=K.serToDate(d).getUTCDay();return `<th class="${weekOffSet().has(w)?'we':''}">${+iso(d).slice(8)}<br><small>${WDL[w]}</small></th>`;};
+  const what=sh==='run'?'التشغيل':sh==='both'?'التشغيل / التوقف':'التوقف',unitTxt=u==='h'?'ساعات':u==='m'?'دقائق':'% من الوردية';
+  const mat=`<h4>يوم بيوم <span class="muted">(${what} بـ ${unitTxt} — ${sh==='run'?'الأخضر الأغمق = تشغيل أكتر':'الأحمر الأغمق = توقف أكتر'} — الخلية المخططة <span class="lg au"></span> = توقف تلقائي (مش مسجّلة في Data) — النقطة · = مش يوم شغل)</span></h4>
+   <div class="tw dtm"><table class="kt"><thead><tr><th>مركز العمل</th><th>القسم</th>${days.map(thDay).join('')}<th>الإجمالي</th></tr></thead><tbody>${mrows.map(o=>`<tr class="${o.t==='s'?'subr':o.t==='t'?'tot':''}">${o.c.map((v,i)=>{if(i<2||i===o.c.length-1)return `<td class="${i===0?'dn':''}">${esc(v)}</td>`;
       if(o.t!=='r')return `<td class="dtc">${esc(v)}</td>`;const c=o.m.days.get(days[i-2]);if(!c)return '<td class="dtc na">·</td>';
-      const x=c.plan?c.v/c.plan:0;return `<td class="dtc ${c.auto?'au':''} ${c.v>0.01?'':'z'}" ${heat(x)} title="${esc(iso(days[i-2])+' — '+o.m.wc+': توقف '+d2(c.stop/60)+' س من '+d2(c.plan/60)+' س (مسجّل '+d2(c.rec/60)+' + غير مسجّل '+d2(c.oth/60)+')'+(c.auto?' — توقف تلقائي':''))}">${esc(v)}</td>`;}).join('')}</tr>`).join('')}</tbody></table></div>`;
-  o.innerHTML=tiles+bars+sumHtml+mat;
-  const mhh=['الماكينة','القسم'].concat(days.map(d=>iso(d)),['الإجمالي']);
+      const hs=sh==='run'?heatG(c.plan?c.run/c.plan:0):heat(c.plan?c.v/c.plan:0);return `<td class="dtc ${c.auto?'au':''} ${(sh==='run'?c.run:c.v)>0.01?'':'z'}" ${hs} title="${esc(iso(days[i-2])+' — '+o.m.wc+': تشغيل '+d2(c.run/60)+' س، توقف '+d2(c.stop/60)+' س من '+d2(c.plan/60)+' س (مسجّل '+d2(c.rec/60)+' + غير مسجّل '+d2(c.oth/60)+')'+(c.auto?' — توقف تلقائي':''))}">${esc(v)}</td>`;}).join('')}</tr>`).join('')}</tbody></table></div>`;
+  o.innerHTML=tiles+unmNote+bars+sumHtml+mat;
+  const mhh=['مركز العمل','القسم'].concat(days.map(d=>iso(d)),['الإجمالي']);
   DT.last={sh:[hd,sb.map(x=>x.c)],mat:[mhh,mrows.map(r=>r.c)]};}
 function bindDT(){const rr=()=>drawDT();
   $('#dtf').onchange=e=>{DT.from=isoToSer(e.target.value)||DT.from;rr();};$('#dtt').onchange=e=>{DT.to=isoToSer(e.target.value)||DT.to;rr();};
   $('#dtm').onclick=()=>{DT.from=S.settings.monthStart;DT.to=R.validDays.length?R.validDays[R.validDays.length-1]:R.eom;$('#dtf').value=iso(DT.from);$('#dtt').value=iso(DT.to);rr();};
   $('#dtd').onclick=()=>{const d=S.settings.selDay;if(d==null)return;DT.from=DT.to=d;$('#dtf').value=$('#dtt').value=iso(d);rr();};
   $('#dtdp').value=DT.dept;$('#dtdp').onchange=e=>{DT.dept=e.target.value;rr();};$('#dtq').oninput=e=>{DT.q=e.target.value;rr();};
-  $('#dtu').value=DT.unit;$('#dtu').onchange=e=>{DT.unit=e.target.value;rr();};$('#dtr').value=DT.reason;$('#dtr').onchange=e=>{DT.reason=e.target.value;rr();};
+  $('#dtu').value=DT.unit;$('#dtu').onchange=e=>{DT.unit=e.target.value;rr();};$('#dtsh').value=DT.show;$('#dtsh').onchange=e=>{DT.show=e.target.value;rr();};$('#dtr').value=DT.reason;$('#dtr').onchange=e=>{DT.reason=e.target.value;rr();};
   $('#dts').value=DT.sort;$('#dts').onchange=e=>{DT.sort=e.target.value;rr();};$('#dtn').value=String(DT.top);$('#dtn').onchange=e=>{DT.top=+e.target.value;rr();};
-  $('#dtk').value=DT.kf;$('#dtk').onchange=e=>{DT.kf=e.target.value;rr();};$('#dthz').checked=DT.hz;$('#dthz').onchange=e=>{DT.hz=e.target.checked;rr();};
+  $('#dthz').checked=DT.hz;$('#dthz').onchange=e=>{DT.hz=e.target.checked;rr();};
   $('#dtcp').onclick=()=>{if(!DT.last)return;copy([DT.last.mat[0]].concat(DT.last.mat[1]).map(r=>r.join('\t')).join('\n'),'جدول التوقف');};
   $('#dtxl').onclick=()=>{if(!DT.last)return toast('لا يوجد بيانات','warn');const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([DT.last.sh[0]].concat(DT.last.sh[1])),'إجمالي الشهر');XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([DT.last.mat[0]].concat(DT.last.mat[1])),'يوم بيوم');saveXlsx(wb,'Downtime_Hours.xlsx');};
   drawDT();}
@@ -506,7 +511,7 @@ function bindStops(){const list=R.autoList.slice().sort((a,b)=>a.day-b.day||0);
   const rows=()=>list.filter(r=>(!$('#sd').value||r.dept===$('#sd').value)&&(!$('#sday').value||r.day===+$('#sday').value));
   const draw=()=>{const l=rows();$('#stl').innerHTML=`<div class="tw"><table class="kt"><thead><tr><th>التاريخ</th><th>Work Center</th><th>القسم</th><th>دقايق مخططة احتُسبت توقف</th><th>الملحوظة</th></tr></thead><tbody>${l.map(r=>`<tr><td>${iso(r.day)}</td><td class="dn">${esc(r.wc)}</td><td>${esc(r.dept)}</td><td>${fn(r.plan)}</td><td class="muted">غير مسجل في Data — احتُسب متوقف</td></tr>`).join('')}</tbody></table></div><p class="muted">${l.length} صف</p>`;};
   $('#sd').onchange=draw;$('#sday').onchange=draw;draw();$('#cpS').onclick=()=>copy(rows().map(r=>[iso(r.day),r.wc,r.dept,r.plan].join('\t')).join('\n'),'سجل التوقف');}
-function mapStatus(m){const n=K.norm(m.name);if(!n)return '';if(R.dup.includes(n))return '⚠ اسم مكرر';if(!m.dept)return '⚠ القسم ناقص';if(m.inc==='لا')return '⏸ موجود بس مستبعد (لا)';if(m.kpi==='لا')return '◐ خارج المؤشرات بس';
+function mapStatus(m){const n=K.norm(m.name);if(!n)return '';if(R.dup.includes(n))return '⚠ اسم مكرر';if(!m.dept)return '⚠ القسم ناقص';if(m.inc==='لا')return '◐ خارج المؤشرات بس (ظاهر في الساعات والتوقف)';
   const info=R.nameInfo.get(n);if(!info)return S.settings.autoStop?'ℹ لا يوجد صفوف في Data — يُحتسب متوقف كل يوم شغل':'ℹ لا يوجد صفوف في Data';return `✔ شغال — ${info.count} صف في Data`;}
 function deptSel(v,attr){return `<select ${attr}><option value="">— اختر —</option>${DEPTS_ALL.map(d=>`<option ${d===v?'selected':''}>${esc(d)}</option>`).join('')}</select>`;}
 function viewMap(){
@@ -514,17 +519,17 @@ function viewMap(){
   const um=R.unmapped;
   return `<div class="card"><h3>إضافة مركز عمل</h3><div class="row"><input id="an" list="dl_unm" placeholder="اسم مركز العمل (زي ما هو في Data)" style="width:320px">${deptSel('','id="ad"')}<input id="ao" type="number" placeholder="وردية مخصصة (دقيقة) — اختياري" style="width:200px"><button class="pri" id="addwc">+ إضافة</button></div>
    <datalist id="dl_unm">${um.map(u=>`<option value="${esc(u.name)}">`).join('')}</datalist></div>
-   <div class="grid2"><div class="card"><h3>لوحة المتابعة</h3><ul class="lst"><li>عدد مركز العمل المسجلة: <b>${tot}</b> (داخل الحساب ${inc}، مستبعدة ${tot-inc}) — منهم خارج المؤشرات بس: <b>${S.map.filter(m=>K.norm(m.name)&&m.inc!=='لا'&&m.kpi==='لا').length}</b></li><li>أسماء مكررة: <b>${R.dup.length}</b> ${R.dup.length?'⚠':''}</li><li>أسماء في Data غير موجودة هنا: <b>${um.length}</b> ${um.length?'⚠':''}</li><li>الحالة: <b>${health().length?'⚠ راجع':'✔ سليم'}</b></li></ul>
+   <div class="grid2"><div class="card"><h3>لوحة المتابعة</h3><ul class="lst"><li>عدد مركز العمل المسجلة: <b>${tot}</b> (داخل حساب المؤشرات ${inc}، خارج المؤشرات ${tot-inc})</li><li>أسماء مكررة: <b>${R.dup.length}</b> ${R.dup.length?'⚠':''}</li><li>أسماء في Data غير موجودة هنا: <b>${um.length}</b> ${um.length?'⚠':''}</li><li>الحالة: <b>${health().length?'⚠ راجع':'✔ سليم'}</b></li></ul>
     <h4>اختبار مركز عمل</h4><div class="row"><input id="tn" placeholder="أدخل الاسم" style="width:260px"><button id="tb">اختبر</button></div><div id="tr" class="muted"></div></div>
    <div class="card"><h3>أسماء في Data وغير موجود في الخريطة (${um.length})</h3>${um.length?`<ul class="lst">${um.map((u,i)=>`<li><b>${esc(u.name)}</b> <span class="muted">${u.count} صف</span> ${deptSel('',`data-qd="${i}"`)}<button data-qa="${i}">إضافة</button></li>`).join('')}</ul>`:'<p class="muted">✔ كل الأسماء مربوطة</p>'}</div></div>
    <div class="card"><div class="row"><input id="ms" placeholder="🔍 بحث بالاسم" style="width:240px"><select id="mdf"><option value="">كل الأقسام</option>${DEPTS_ALL.map(d=>`<option>${esc(d)}</option>`).join('')}</select><label><input type="checkbox" id="mw"> التحذيرات بس</label></div>
-   <p class="muted"><b>يدخل في الحساب = لا</b>: المركز يتشال من كل حاجة. <b>يدخل في المؤشرات = لا</b>: المركز يفضل ظاهر ومحسوب في ساعات التشغيل والتوقف والإجماليات وتتبّع الصنف، بس مش بيدخل في الاستغلال والأداء والتوافر (عشان الكمية متتضاعفش لو بيشتغل على نفس الأصناف والمراحل مع مركز تاني).</p>
-   <div class="tw"><table class="kt mt"><thead><tr><th>Work Center</th><th>القسم</th><th>وردية مخصصة (دقيقة)</th><th>يدخل في الحساب؟</th><th>يدخل في المؤشرات؟</th><th>ملاحظة</th><th>الحالة</th><th></th></tr></thead><tbody id="mb"></tbody></table></div></div>`;}
+   <p class="muted"><b>يدخل في حساب المؤشرات = لا</b>: المركز مش بيدخل في الاستغلال والأداء والتوافر (عشان الكميات متتضاعفش لو بيشتغل على نفس الأصناف والمراحل مع مركز تاني)، بس بيفضل ظاهر ومحسوب في ساعات التشغيل والتوقف والإجماليات وتتبّع الصنف، وبيتحسب توقف تلقائي لو ماتسجلش في يوم شغل.</p>
+   <div class="tw"><table class="kt mt"><thead><tr><th>Work Center</th><th>القسم</th><th>وردية مخصصة (دقيقة)</th><th>يدخل في حساب المؤشرات؟</th><th>ملاحظة</th><th>الحالة</th><th></th></tr></thead><tbody id="mb"></tbody></table></div></div>`;}
 function drawMapRows(){const q=K.norm($('#ms').value),df=$('#mdf').value,w=$('#mw').checked;let h='';
   S.map.forEach((m,i)=>{const st=mapStatus(m);if(q&&!K.norm(m.name).includes(q))return;if(df&&m.dept!==df)return;if(w&&!/^⚠/.test(st))return;
     h+=`<tr data-i="${i}"><td><input data-f="name" value="${esc(m.name)}" class="w"></td><td>${deptSel(m.dept,'data-f="dept"')}</td><td><input data-f="ovr" type="number" value="${m.ovr||''}" style="width:90px"></td>
-    <td><select data-f="inc"><option ${m.inc!=='لا'?'selected':''}>نعم</option><option ${m.inc==='لا'?'selected':''}>لا</option></select></td><td><select data-f="kpi" title="لا = ساعاتها وتوقفاتها تظهر في الإجماليات وساعات التوقف، بس مش بتدخل في الاستغلال والأداء والتوافر"><option ${m.kpi!=='لا'?'selected':''}>نعم</option><option ${m.kpi==='لا'?'selected':''}>لا</option></select></td><td><input data-f="note" value="${esc(m.note||'')}" class="w"></td><td class="st">${esc(st)}</td><td><button class="del" data-del="${i}">حذف</button></td></tr>`;});
-  $('#mb').innerHTML=h||'<tr><td colspan="8" class="muted">لا يوجد نتائج</td></tr>';
+    <td><select data-f="inc"><option ${m.inc!=='لا'?'selected':''}>نعم</option><option ${m.inc==='لا'?'selected':''}>لا</option></select></td><td><input data-f="note" value="${esc(m.note||'')}" class="w"></td><td class="st">${esc(st)}</td><td><button class="del" data-del="${i}">حذف</button></td></tr>`;});
+  $('#mb').innerHTML=h||'<tr><td colspan="7" class="muted">لا يوجد نتائج</td></tr>';
   $$('#mb [data-f]').forEach(el=>el.onchange=()=>{const i=+el.closest('tr').dataset.i,f=el.dataset.f,m=S.map[i];
     if(f==='ovr')m.ovr=+el.value>0?+el.value:null;else m[f]=el.value;save();render();toast('✔ تم حفظ التعديل على '+m.name);});
   $$('#mb [data-del]').forEach(b=>b.onclick=async()=>{const i=+b.dataset.del,m=S.map[i];if(!await ask('حذف "'+m.name+'" من الخريطة؟\nلو ليه بيانات في Data مش ستُحتسب. (لو ترغب تخرجه من الحساب بس اختر "لا")'))return;
@@ -537,21 +542,22 @@ function bindMap(){drawMapRows();['#ms','#mdf','#mw'].forEach(s=>$(s).oninput=dr
     if(S.map.some(m=>K.norm(m.name)===K.norm(name)))return toast('⚠ الاسم موجود بالفعل في الخريطة','warn');
     S.map.push({name,dept,ovr:o>0?o:null,inc:'نعم',note:''});save();render();
     const ok=S.map.some(m=>K.norm(m.name)===K.norm(name)),info=R.nameInfo.get(K.norm(name));
-    toast(ok?`✔ تمت إضافة "${name}" — ${dept} — ${info?info.count+' صف في Data':'لا يوجد صفوف في Data بعد'} — داخل الحساب`:'⚠ الإضافة فشلت',ok?'ok':'warn');};
+    toast(ok?`✔ تمت إضافة "${name}" — ${dept} — ${info?info.count+' صف في Data':'لا يوجد صفوف في Data بعد'} — داخل حساب المؤشرات`:'⚠ الإضافة فشلت',ok?'ok':'warn');};
   $$('[data-qa]').forEach(b=>b.onclick=()=>{const i=+b.dataset.qa,u=R.unmapped[i],dept=$(`[data-qd="${i}"]`).value;if(!dept)return toast('اختر القسم الأول','warn');
     S.map.push({name:u.name,dept,ovr:null,inc:'نعم',note:''});save();render();toast(`✔ تمت إضافة "${u.name}" — ${dept} — ${u.count} صف بقوا يُحتسبوا`);});
   $('#tb').onclick=()=>{const n=K.norm($('#tn').value);if(!n){$('#tr').textContent='';return;}const m=S.map.find(x=>K.norm(x.name)===n),info=R.nameInfo.get(n);
-    $('#tr').innerHTML=m?`✔ <b>موجود</b> — ${esc(m.dept||'بدون قسم')} — ${m.inc==='لا'?'مستبعد من الحساب':m.kpi==='لا'?'داخل الحساب وخارج المؤشرات':'داخل الحساب'} — ${info?info.count+' صف في Data':'لا يوجد صفوف في Data'}`:`✖ <b>غير موجود في الخريطة</b>${info?` — وليه ${info.count} صف في Data مش يُحتسبوا`:''}`;};}
+    $('#tr').innerHTML=m?`✔ <b>موجود</b> — ${esc(m.dept||'بدون قسم')} — ${m.inc==='لا'?'خارج حساب المؤشرات (ظاهر في الساعات والتوقف)':'داخل حساب المؤشرات'} — ${info?info.count+' صف في Data':'لا يوجد صفوف في Data'}`:`✖ <b>غير موجود في الخريطة</b>${info?` — وليه ${info.count} صف في Data مش يُحتسبوا`:''}`;};}
 function viewSettings(){
   const st=S.settings;
-  return `<div class="grid2"><div class="card"><h3>استبعاد مركز عمل بتاريخ</h3><p class="muted">"من" و"إلى" فاضيين = كل الأيام. "من" بس = يوم واحد. الاثنين = فترة. البيانات بتفضل في Data وبتخرج من الحساب بس.</p>
+  return `<div class="grid2"><div class="card"><h3>استبعاد مركز عمل بتاريخ</h3><p class="muted">"من" و"إلى" فاضيين = كل الأيام. "من" بس = يوم واحد. الاثنين = فترة. البيانات بتفضل في Data وبتخرج من حساب المؤشرات بس (وبتفضل ظاهرة في ساعات التوقف والإجماليات).</p>
    <datalist id="dl_wc">${S.map.map(m=>`<option value="${esc(m.name)}">`).join('')}</datalist><div class="tw"><table class="kt"><thead><tr><th>Work Center</th><th>من يوم</th><th>إلى يوم</th><th>السبب</th><th>الحالة</th><th></th></tr></thead><tbody>
    ${S.excl.map((e,i)=>{const ok=S.map.some(m=>K.norm(m.name)===K.norm(e.wc));const bad=e.from!=null&&e.to!=null&&e.from>e.to;const s=!ok?'⚠ الاسم غير موجود في الخريطة':bad?'⚠ البداية بعد النهاية':(e.from==null&&e.to==null)?'✔ كل الأيام':e.to==null?'✔ يوم واحد':'✔ فترة';
     return `<tr data-i="${i}"><td><input data-e="wc" list="dl_wc" value="${esc(e.wc)}" class="w"></td><td><input type="date" data-e="from" value="${iso(e.from)}"></td><td><input type="date" data-e="to" value="${iso(e.to)}"></td><td><input data-e="reason" value="${esc(e.reason||'')}"></td><td class="st">${s}</td><td><button class="del" data-edel="${i}">حذف</button></td></tr>`;}).join('')}</tbody></table></div>
    <button id="addex" class="pri">+ إضافة استبعاد</button></div>
-   <div class="card"><h3>إعدادات</h3><div class="form"><label><input type="checkbox" id="as" ${st.autoStop?'checked':''}> تفعيل التوقف التلقائي (مركز عمل داخل الحساب وغير مسجل في يوم شغل)</label>
+   <div class="card"><h3>إعدادات</h3><div class="form"><label><input type="checkbox" id="as" ${st.autoStop?'checked':''}> تفعيل التوقف التلقائي (أي مركز عمل غير مسجل في يوم شغل — بيظهر في ساعات التوقف، وبيدخل في المؤشرات بس لو «يدخل في حساب المؤشرات = نعم»)</label>
    <label>أقل عدد صفوف في Data عشان اليوم يتحسب يوم شغل <input type="number" id="thr" min="1" value="${st.thr}" style="width:80px"></label>
-   <label>أيام إجازة (لا يوجد توقف تلقائي فيها): <input type="date" id="dof"> <button id="adof">إضافة</button></label><div>${(S.daysOff||[]).map((d,i)=>`<span class="chip">${iso(d)} <a data-dd="${i}">✕</a></span>`).join('')||'<span class="muted">لا يوجد</span>'}</div>
+   <div><b>الإجازة الأسبوعية</b> <span class="muted">(مفيش توقف تلقائي في الأيام دي، ومش بتتحسب يوم شغل)</span></div><div class="row">${WEEKN.map((n,i)=>`<label><input type="checkbox" data-wk="${i}" ${weekOffSet().has(i)?'checked':''}> ${n}</label>`).join('')}</div>
+   <label>أيام إجازة محددة (لا يوجد توقف تلقائي فيها): <input type="date" id="dof"> <button id="adof">إضافة</button></label><div>${(S.daysOff||[]).map((d,i)=>`<span class="chip">${iso(d)} <a data-dd="${i}">✕</a></span>`).join('')||'<span class="muted">لا يوجد</span>'}</div>
    <hr><h4>قسم الثلاجات (استغلال الطاقة بس)</h4><label><input type="checkbox" id="fr" ${st.frOn?'checked':''}> تفعيل القاعدة</label>
    <label>الوقت النظري للقطعة (دقيقة) <input type="number" id="theo" min="0.1" step="0.1" value="${st.theo}" style="width:90px"></label>
    <label>كلمة الإنتاج الفعلي (في اسم الصنف) <input id="kw" value="${esc(st.kw)}" style="width:120px"></label></div></div></div>`;}
@@ -560,6 +566,7 @@ function bindSettings(){const st=S.settings;
   $$('[data-e]').forEach(el=>el.onchange=()=>{const i=+el.closest('tr').dataset.i,f=el.dataset.e,e=S.excl[i];if(f==='from'||f==='to')e[f]=isoToSer(el.value);else e[f]=el.value;save();render();});
   $$('[data-edel]').forEach(b=>b.onclick=()=>{S.excl.splice(+b.dataset.edel,1);save();render();toast('✔ تم إلغاء الاستبعاد');});
   $('#as').onchange=e=>{st.autoStop=e.target.checked;save();render();};$('#thr').onchange=e=>{st.thr=Math.max(1,+e.target.value||1);save();render();};
+  $$('[data-wk]').forEach(c=>c.onchange=()=>{const set=weekOffSet();if(c.checked)set.add(+c.dataset.wk);else set.delete(+c.dataset.wk);st.weekOff=[...set].sort();save();render();toast('✔ الإجازة الأسبوعية: '+(st.weekOff.map(i=>WEEKN[i]).join('، ')||'لا يوجد'));});
   $('#adof').onclick=()=>{const v=isoToSer($('#dof').value);if(v&&!S.daysOff.includes(v)){S.daysOff.push(v);S.daysOff.sort();save();render();}};
   $$('[data-dd]').forEach(a=>a.onclick=()=>{S.daysOff.splice(+a.dataset.dd,1);save();render();});
   $('#fr').onchange=e=>{st.frOn=e.target.checked;save();render();};$('#theo').onchange=e=>{if(+e.target.value>0){st.theo=+e.target.value;save();render();}};$('#kw').onchange=e=>{st.kw=e.target.value.trim();save();render();};}
@@ -586,7 +593,7 @@ function parseAOA(aoa){let hi=-1;for(let i=0;i<Math.min(aoa.length,8);i++){if((a
   return {rows};}
 function sheetsOf(wb){return wb.SheetNames.map(n=>({name:n,res:parseAOA(XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:null}))})).filter(x=>x.res&&x.res.rows&&x.res.rows.length);}
 function loadCalculator(wb){const g=(ws,a)=>ws&&ws[a]?ws[a].v:undefined;const M=wb.Sheets['KPI Map'],X=wb.Sheets['KPI Exclusions'],E=wb.Sheets['KPI Entry'];
-  const map=[];for(let r=4;r<=300;r++){const n=g(M,'A'+r);if(n==null||String(n).trim()==='')continue;map.push({name:String(n),dept:g(M,'B'+r)||'',ovr:+g(M,'D'+r)>0?+g(M,'D'+r):null,inc:g(M,'E'+r)==='لا'?'لا':'نعم',kpi:g(M,'F'+r)==='لا'?'لا':'نعم',note:g(M,'C'+r)||''});}
+  const map=[];for(let r=4;r<=300;r++){const n=g(M,'A'+r);if(n==null||String(n).trim()==='')continue;map.push({name:String(n),dept:g(M,'B'+r)||'',ovr:+g(M,'D'+r)>0?+g(M,'D'+r):null,inc:g(M,'E'+r)==='لا'?'لا':'نعم',note:g(M,'C'+r)||''});}
   const excl=[];for(let r=4;r<=63;r++){const n=g(X,'A'+r);if(!n)continue;excl.push({wc:String(n),from:toSer(g(X,'C'+r)),to:toSer(g(X,'D'+r)),reason:g(X,'E'+r)||''});}
   const off=[];for(let r=8;r<=27;r++){const d=toSer(g(X,'K'+r));if(d)off.push(d);}
   const depts=[];for(let r=11;r<=18;r++){const d=g(E,'A'+r);if(d)depts.push(String(d));}
@@ -630,7 +637,7 @@ function viewGuide(){return `<div class="card guide"><h3>شرح سريع</h3>
  <p><b>① استغلال الطاقة:</b> الإنتاج الفعلي (كمية) ÷ الطاقة القصوى (كمية). الطاقة القصوى = الكمية × الزمن المخطط ÷ الزمن المثالي، من الأيام التي فيها إنتاج بس. الهدف 85%.</p>
  <p><b>② الأداء:</b> الزمن المثالي للإنتاج الفعلي ÷ زمن التشغيل الفعلي (ساعات Model Working Time hours بدون صفوف "توقف"). الهدف 100%.</p>
  <p><b>③ التوافر:</b> زمن التشغيل الفعلي ÷ الزمن المخطط (480 دقيقة لكل مركز عمل ليها صفوف، أو الوردية المخصصة، أو الساعات المسجلة إذا أكتر).</p>
- <p><b>التوقف التلقائي:</b> مركز عمل داخل الحساب ومالوش صف في Data في يوم شغل يُحتسب متوقف (التوافر 0%). اليوم يُحتسب يوم شغل إذا فيه صفوف كفاية (الافتراضي 10) وغير موجود في أيام الإجازة.</p>
+ <p><b>التوقف التلقائي:</b> أي مركز عمل ومالوش صف في Data في يوم شغل يُحتسب متوقف (التوافر 0%) — ويظهر في ساعات التوقف حتى لو خارج حساب المؤشرات. اليوم يُحتسب يوم شغل إذا فيه صفوف كفاية (الافتراضي 10) وغير موجود في أيام الإجازة.</p>
  <p><b>الثلاجات:</b> الإنتاج الفعلي من الصفوف التي اسم الصنف فيها كلمة "تجميع"، والطاقة القصوى على الوقت النظري للقطعة (الافتراضي 50 دقيقة) — على استغلال الطاقة بس.</p>
  <p><b>الاستخدام اليومي:</b> (1) من تبويب البيانات استورد ملف الإنتاج اليومي (الشيتات بتتقرا لوحدها) أو الصق الصفوف. (2) راجع الفحوصات في تبويب المؤشرات. (3) اختر اليوم وانسخ كل مؤشر. الأسماء بتتطابق بدون حساسية للمسافات الزيادة أو حالة الحروف.</p>
  <p><b>تسجيل البيانات:</b> تبويب تسجيل البيانات بنفس أعمدة شيت Data. أدخل مركز العمل والصنف (زمن الدورة يُملأ تلقائيًا من الذاكرة) ثم الكمية والساعات، وEnter بينقلك للخانة التي بعدها وبيضيف الصف. "تجهيز اليوم" بيعمل مسودات من اليوم التي قبله. القايمة التي تحت بتوريك الماكينات التي بعد غير مسجلة (ستُحتسب متوقفة).</p>
@@ -650,7 +657,7 @@ const EN={day:null,wc:'',prod:'',cyc:'',qty:'',hrs:'',auto:false,more:false,filt
 const XF=[['setup','setup time Sec','number'],['chg','changeover time sec.','number'],['bd','M/C Breakdown Sec.','number'],['bdc','Causes of Breakdown','text'],['ops','No of Operators or Machines','number'],['cs','Causes of Stoppages','text']];
 function entryDay(){if(EN.day==null){const ds=S.data.map(r=>r.day);EN.day=S.settings.lastEntryDay||(ds.length?Math.max(...ds):S.settings.monthStart);}return EN.day;}
 const dayRows=d=>S.data.filter(r=>r.day===d);
-function pendingWcs(d){const have=new Set(dayRows(d).filter(r=>!(r.x&&r.x.draft)).map(r=>K.norm(r.wc)));return S.map.filter(m=>K.norm(m.name)&&m.inc!=='لا'&&!have.has(K.norm(m.name)));}
+function pendingWcs(d){const have=new Set(dayRows(d).filter(r=>!(r.x&&r.x.draft)).map(r=>K.norm(r.wc)));return S.map.filter(m=>K.norm(m.name)&&!have.has(K.norm(m.name)));}
 function viewEntry(){const d=entryDay();
   return `<div class="card hotc"><div class="row"><h3 style="margin:0">تسجيل البيانات</h3><label>اليوم</label><button id="dprev">◀</button><input type="date" id="eday" value="${iso(d)}"><button id="dnext">▶</button><button id="dlast">آخر يوم مسجل</button><span id="esum" class="muted"></span></div>
   <div class="fgrid"><div><label>Work center</label><input id="fwc" list="dl_ewc" autocomplete="off" placeholder="أدخل أو اختار"></div>
@@ -663,12 +670,12 @@ function viewEntry(){const d=entryDay();
   <div id="fhint" class="muted"></div><div id="fdept" class="row" style="display:none"><span class="muted">⚠ مركز العمل ده غير موجود في الخريطة — اختر قسمه وسيُضاف تلقائي:</span>${deptSel('','id="fdsel"')}</div>
   <div class="row"><button id="fmore">حقول إضافية (setup / changeover / breakdown / الأسباب)</button><span id="fxs" style="display:none;gap:8px;flex-wrap:wrap" class="row">${XF.map(([k,l,t])=>`<input data-x="${k}" type="${t}" placeholder="${l}" style="width:${t==='text'?170:120}px">`).join('')}</span></div>
   <div class="bar"><button id="fstop">تسجيل توقف (مركز عمل + سبب)</button><button id="fdup">تكرار آخر صف</button><button id="fprep">تجهيز اليوم من يوم سابق</button><button id="fclr" class="del">حذف المسودات الفارغة</button></div></div>
-  <div class="card"><h4 style="margin-top:0">ماكينات داخلة في الحساب ومالهاش تسجيل في اليوم ده (<span id="pcount">0</span>) — إذا فضلت كده ستُحتسب متوقفة</h4><div id="pchips"></div></div>
+  <div class="card"><h4 style="margin-top:0">ماكينات مالهاش تسجيل في اليوم ده (<span id="pcount">0</span>) — إذا فضلت كده ستُحتسب متوقفة</h4><div id="pchips"></div></div>
   <div class="card"><div class="row"><h3 style="margin:0">صفوف اليوم (بنفس أعمدة شيت Data)</h3><input id="efil" placeholder="🔍 فلتر بمركز العمل أو الصنف" style="width:230px"><label><input type="checkbox" id="exc"> الأعمدة الإضافية</label>
    <button id="ecp">نسخ صفوف اليوم (بصيغة Data)</button><button id="ecpa">نسخ كل البيانات</button><button id="exl">تصدير جميع البيانات (Excel)</button></div><div class="tw"><table class="kt" id="etab"></table></div></div>`;}
 function drawEntrySummary(){const d=entryDay(),rows=dayRows(d).filter(r=>!(r.x&&r.x.draft)),wcs=new Set(rows.map(r=>K.norm(r.wc))),pw=pendingWcs(d);
   $('#esum').textContent=`${rows.length} صف · ${wcs.size} مركز عمل مسجل`;$('#pcount').textContent=pw.length;
-  $('#pchips').innerHTML=pw.length?pw.map(m=>`<span class="chip pc" data-pw="${esc(m.name)}">${esc(m.name)}</span>`).join(''):'<span class="muted">✔ كل الماكينات التي داخلة في الحساب ليها تسجيل</span>';
+  $('#pchips').innerHTML=pw.length?pw.map(m=>`<span class="chip pc" data-pw="${esc(m.name)}">${esc(m.name)}</span>`).join(''):'<span class="muted">✔ كل الماكينات ليها تسجيل</span>';
   $$('#pchips [data-pw]').forEach(c=>c.onclick=()=>{$('#fwc').value=c.dataset.pw;onWc();$('#fpr').focus();});}
 function drawProducts(){const w=K.norm($('#fwc').value),a=mem().wc.get(w);const dl=$('#dl_epr');
   dl.innerHTML=a?[...a.prods.values()].sort((x,y)=>y.last-x.last||y.n-x.n).map(p=>`<option value="${esc(p.prod)}">${p.cyc?p.cyc+' ث':''}</option>`).join(''):'';}
@@ -761,8 +768,8 @@ function runChecks(C){const rows=C.rows,out=[];const add=(title,level,items,hint
   add('صفوف مكررة (نفس الماكينة واليوم والصنف)','warn',[...dk.values()].filter(a=>a.length>1).map(a=>`${lab(a[0])} — ${a.length} مرات (كمية: ${a.map(x=>x.qty).join(' + ')})`));
   const sp=new Map();rows.forEach(r=>{const n=K.norm(r.wc);if(!sp.has(n))sp.set(n,new Set());sp.get(n).add(r.wc);});
   add('نفس مركز العمل مكتوب بأكتر من طريقة (مسافات أو حروف) — جُمعت معًا مع بعض','warn',[...sp.values()].filter(s=>s.size>1).map(s=>[...s].map(x=>'"'+x+'"').join(' ، ')));
-  const cnt=new Map();rows.forEach(r=>cnt.set(r.day,(cnt.get(r.day)||0)+1));const gaps=[];for(let d=TT.from;d<=TT.to;d++){const dw=K.serToDate(d).getUTCDay();if(dw!==5&&dw!==6&&!cnt.get(d))gaps.push(iso(d));}
-  add('أيام بدون أي بيانات (غير الجمعة والسبت) — إذا كانت أيام شغل راجع التسجيل','info',gaps);
+  const cnt=new Map();rows.forEach(r=>cnt.set(r.day,(cnt.get(r.day)||0)+1));const gaps=[];for(let d=TT.from;d<=TT.to;d++){const dw=K.serToDate(d).getUTCDay();if(!weekOffSet().has(dw)&&!(S.daysOff||[]).includes(d)&&!cnt.get(d))gaps.push(iso(d));}
+  add('أيام بدون أي بيانات (غير أيام الإجازة) — إذا كانت أيام شغل راجع التسجيل','info',gaps);
   return out;}
 
 /* ---------- fuzzy product matching ---------- */
