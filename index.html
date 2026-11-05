@@ -272,9 +272,9 @@ let S=load(), R=null, tab='entry', pending=null;
 const ser=()=>JSON.stringify(Object.assign({},S,{data:S.data.map(r=>[r.wc,r.day,r.prod,r.cyc,r.qty,r.hrs,r.x||0])}));
 let memVer=0,fh=null,fhState='none',lastSave=null,fileTimer=null;
 function applyJson(txt,silent){const o=JSON.parse(txt);o.data=o.data.map(r=>({wc:r[0],day:r[1],prod:r[2],cyc:r[3],qty:r[4],hrs:r[5],x:r[6]||null}));S=o;if(silent){try{localStorage.setItem(KEY,ser());lastSave=new Date();}catch(e){}pill();}else save();}
-function pill(){const p=$('#savest');if(!p)return;if(GHC){p.className='pill '+(ghDirty?'warn':'ok');p.textContent=ghDirty?'⚠ تعديلات لم تم حفظتش على GitHub — اضغط 💾':'✔ متحفظ على GitHub';return;}if(HOSTED){const t=CLOUD.last?CLOUD.last.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';p.className='pill '+(CLOUD.status==='err'||CLOUD.status==='nodb'?'warn':'ok');p.textContent=CLOUD.status==='loading'?'⏳ جاري تحميل البيانات من الموقع...':CLOUD.status==='nodb'?'⚠ لازم تسجل دخول في claude.ai':!CLOUD.canWrite?'👁 عرض فقط — متحدث لحظيًا':CLOUD.status==='saving'?'⏳ يُحفظ على الموقع...':CLOUD.status==='err'?'⚠ فشل الحفظ على الموقع':'☁ متزامن مع الموقع'+(t?' — آخر حفظ '+t:'');return;}const t=lastSave?lastSave.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';
+function pill(){const p=$('#savest');if(!p)return;if(GHC){p.className='pill '+(ghDirty?'warn':'ok');const gt=ghLast?ghLast.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';p.textContent=ghDirty?'⚠ فيه تعديلات لم تُرفع على GitHub — اضغط 💾':'✔ متزامن مع GitHub'+(gt?' — '+gt:'');return;}if(HOSTED){const t=CLOUD.last?CLOUD.last.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';p.className='pill '+(CLOUD.status==='err'||CLOUD.status==='nodb'?'warn':'ok');p.textContent=CLOUD.status==='loading'?'⏳ جاري تحميل البيانات من الموقع...':CLOUD.status==='nodb'?'⚠ لازم تسجل دخول في claude.ai':!CLOUD.canWrite?'👁 عرض فقط — متحدث لحظيًا':CLOUD.status==='saving'?'⏳ يُحفظ على الموقع...':CLOUD.status==='err'?'⚠ فشل الحفظ على الموقع':'☁ متزامن مع الموقع'+(t?' — آخر حفظ '+t:'');return;}const t=lastSave?lastSave.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';
   p.className='pill '+(fhState==='warn'?'warn':'ok');p.textContent=fhState==='file'?`✔ محفوظ في الملف (${fh.name}) — ${t}`:fhState==='warn'?`⚠ الملف المرتبط (${fh?fh.name:''}) محتاج تفعيل — اضغط حفظ الآن`:(t?`✔ محفوظ تلقائيًا في المتصفح — ${t}`:'✔ الحفظ التلقائي في المتصفح شغال');}
-function save(){memVer++;if(HOSTED){cloudSchedule();pill();return;}try{localStorage.setItem(KEY,ser());lastSave=new Date();if(GHC)ghMark(true);}catch(e){toast('تعذر الحفظ التلقائي في المتصفح — استخدم "حفظ الآن"','warn');}
+function save(){memVer++;if(HOSTED){cloudSchedule();pill();return;}try{localStorage.setItem(KEY,ser());lastSave=new Date();if(GHC)ghMarkSoon();}catch(e){toast('تعذر الحفظ التلقائي في المتصفح — استخدم "حفظ الآن"','warn');}
   if(fh){clearTimeout(fileTimer);fileTimer=setTimeout(()=>writeFile(false),1200);}pill();}
 async function writeFile(interactive){if(!fh)return false;try{let p=await fh.queryPermission({mode:'readwrite'});if(p!=='granted'&&interactive)p=await fh.requestPermission({mode:'readwrite'});
   if(p!=='granted'){fhState='warn';pill();return false;}const w=await fh.createWritable();await w.write(ser());await w.close();fhState='file';lastSave=new Date();pill();return true;}catch(e){fhState='warn';pill();return false;}}
@@ -1261,21 +1261,65 @@ async function cloudInit(){const db=await claude.use('db');if(!db){CLOUD.status=
 const TABS=[['entry','تسجيل البيانات',viewEntry,bindEntry],['kpi','مؤشرات الأداء',viewKpi,bindKpi],['log','السجل اليومي',viewLog,bindLog],['tot','إجماليات مراكز العمل',viewTot,bindTot],['close','إقفال الأصناف',viewClose,bindClose],['dt','ساعات التوقف',viewDT,bindDT],['stops','التوقفات المفترضة',viewStops,bindStops],['map','مراكز العمل',viewMap,bindMap],['set','الاستبعاد والإعدادات',viewSettings,bindSettings],['data','البيانات',viewData,bindData],['guide','دليل الاستخدام',viewGuide,()=>{}]];
 
 /* ================= GitHub Pages mode: data.json in the repo, token typed once and kept in this browser only ================= */
-let ghDirty=false,ghBusy=false;const GHDK=KEY+'_ghdirty';try{ghDirty=!!GHC&&localStorage.getItem(GHDK)==='1';}catch(e){}
-function ghMark(v){ghDirty=v;try{v?localStorage.setItem(GHDK,'1'):localStorage.removeItem(GHDK);}catch(e){}pill();}
+let ghDirty=false,ghBusy=false,ghLast=null,ghBaseObj=null,ghT=0,ghLastPull=0;const GHB=KEY+'_ghbase',ghVol=['selDay','lastEntryDay','monthStart'];
+const rowSig=r=>JSON.stringify([r[0],r[1],r[2],r[3],r[4],r[5],r[6]||0]);
+const parseState=txt=>{const o=JSON.parse(txt);o.data=o.data||[];o.settings=o.settings||{};return o;};
+const rawOf=()=>JSON.parse(ser());
+function rowsHash(rows){let t=0;for(const r of rows){const s=rowSig(r);let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}t=(t+(h>>>0))>>>0;}return t.toString(36)+':'+rows.length;}
+function stable(o){const s=Object.assign({},o.settings);ghVol.forEach(k=>delete s[k]);return JSON.stringify({s,d:o.depts,m:o.map,e:o.excl,o:o.daysOff,c:o.closedD,r:rowsHash(o.data)});}
+function getBase(){if(ghBaseObj)return ghBaseObj;try{const t=localStorage.getItem(GHB);if(t){ghBaseObj=parseState(t);return ghBaseObj;}}catch(e){}return null;}
+function setBase(txt){try{localStorage.setItem(GHB,txt);}catch(e){}ghBaseObj=parseState(txt);ghMarkNow();}
+function ghMarkNow(){const b=getBase();ghDirty=!!GHC&&(!b||stable(rawOf())!==stable(b));pill();}
+function ghMarkSoon(){clearTimeout(ghT);ghT=setTimeout(ghMarkNow,500);}
+function ghMerge(base,local,remote){
+  const cnt=rows=>{const m=new Map();rows.forEach(r=>{const k=rowSig(r);m.set(k,(m.get(k)||0)+1);});return m;};
+  const cb=cnt(base.data),cl=cnt(local.data),add=new Map(),del=new Map();
+  for(const [k,c] of cl){const d=c-(cb.get(k)||0);if(d>0)add.set(k,d);}
+  for(const [k,c] of cb){const d=c-(cl.get(k)||0);if(d>0)del.set(k,d);}
+  const rows=[];for(const r of remote.data){const k=rowSig(r),d=del.get(k)||0;if(d>0){del.set(k,d-1);continue;}rows.push(r);}
+  for(const [k,c] of add)for(let i=0;i<c;i++)rows.push(JSON.parse(k));
+  const J=JSON.stringify,pick=k=>J(local[k])!==J(base[k])?local[k]:remote[k],bs=base.settings||{},st={};
+  new Set([...Object.keys(remote.settings),...Object.keys(local.settings)]).forEach(k=>{st[k]=(ghVol.includes(k)||J(local.settings[k])!==J(bs[k]))?local.settings[k]:remote.settings[k];});
+  const cd={};new Set([...Object.keys(remote.closedD||{}),...Object.keys(local.closedD||{}),...Object.keys(base.closedD||{})]).forEach(k=>{const l=(local.closedD||{})[k],b=(base.closedD||{})[k],r=(remote.closedD||{})[k],v=J(l)!==J(b)?l:r;if(v!==undefined)cd[k]=v;});
+  return {settings:st,depts:pick('depts'),map:pick('map'),excl:pick('excl'),daysOff:pick('daysOff'),data:rows,closedD:cd};}
+function applyState(o,keepVol){const old=(S&&S.settings)||{};if(keepVol)ghVol.forEach(k=>{if(old[k]!==undefined)o.settings[k]=old[k];});o.data=o.data.map(r=>({wc:r[0],day:r[1],prod:r[2],cyc:r[3],qty:r[4],hrs:r[5],x:r[6]||null}));S=o;try{localStorage.setItem(KEY,ser());lastSave=new Date();}catch(e){}}
+const b64d=b=>{const bin=atob(b.replace(/\s/g,''));const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new TextDecoder().decode(u);};
 const b64u=s=>{const b=new TextEncoder().encode(s);let x='';for(let i=0;i<b.length;i+=0x8000)x+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(x);};
 async function ghToken(){let t=localStorage.getItem('gh_token');if(t)return t;t=((await askText('الصق GitHub Token (Fine-grained — صلاحية Contents: Read and write على الريبو ده بس). يُحفظ في متصفحك أنت بس.',''))||'').trim();if(!t)return null;localStorage.setItem('gh_token',t);return t;}
+async function ghFetch(){const tk=localStorage.getItem('gh_token'),H={Accept:'application/vnd.github.raw+json'};if(tk)H.Authorization='Bearer '+tk;
+  try{const r=await fetch(`https://api.github.com/repos/${GHC.owner}/${GHC.repo}/contents/${GHC.path}?ref=${GHC.branch}&t=${Date.now()}`,{headers:H,cache:'no-store'});if(r.ok)return {txt:await r.text()};if(r.status===404)return {missing:true};}catch(e){}
+  const r2=await fetch('data.json?t='+Date.now(),{cache:'no-store'});if(r2.status===404)return {missing:true};if(!r2.ok)throw new Error(r2.status);return {txt:await r2.text()};}
+function ghChoice(msg){return new Promise(res=>{const o=document.createElement('div');o.className='modal';o.innerHTML=`<div class="mbox"><p>${esc(msg).replace(/\n/g,'<br>')}</p><div class="row"><button class="pri" data-c="remote">استخدم نسخة GitHub</button><button data-c="merge">دمج الاتنين</button><button data-c="local">احتفظ بنسخة الجهاز</button></div></div>`;document.body.appendChild(o);o.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{o.remove();res(b.dataset.c);});});}
+const addedRows=(before,after)=>{const m=new Map();before.forEach(r=>{const k=rowSig(r);m.set(k,(m.get(k)||0)+1);});let n=0;after.forEach(r=>{const k=rowSig(r),c=m.get(k)||0;if(c>0)m.set(k,c-1);else n++;});return n;};
+async function ghInit(manual){if(ghBusy)return;ghBusy=true;ghLastPull=Date.now();
+  try{const R0=await ghFetch();if(R0.missing){ghDirty=true;pill();if(manual)toast('مفيش data.json على GitHub لسه — اضغط حفظ على GitHub عشان ترفع البيانات','warn');return;}
+    const remote=parseState(R0.txt),local=rawOf();let hasLocal=false;try{hasLocal=!!localStorage.getItem(KEY);}catch(e){}const base=getBase(),before=local.data;let msg='';
+    if(!hasLocal){applyState(remote,false);msg=`✔ اتحمّلت البيانات من GitHub (${remote.data.length} صف)`;}
+    else if(stable(local)===stable(remote)){}
+    else if(base&&stable(local)===stable(base)){applyState(remote,true);const n=addedRows(before,remote.data);msg=`✔ اتحدّثت من GitHub${n?' — +'+n+' صف جديد':''}`;}
+    else if(base){const m=ghMerge(base,local,remote);applyState(m,true);const n=addedRows(before,m.data);msg=`✔ اتدمجت تعديلات GitHub مع تعديلاتك${n?' (+'+n+' صف من GitHub)':''} — اضغط 💾 لرفع تعديلاتك`;}
+    else{const dr=addedRows(local.data,remote.data),dl=addedRows(remote.data,local.data);
+      const c=await ghChoice(`نسخة GitHub مختلفة عن نسخة الجهاز ده:\n• صفوف موجودة على GitHub بس: ${dr}\n• صفوف موجودة على الجهاز ده بس: ${dl}\n\nلو الجهاز ده قديم اختار «استخدم نسخة GitHub». لو دخلت داتا هنا ولسه ما رفعتهاش اختار «دمج الاتنين».`);
+      if(c==='remote'){applyState(remote,true);msg='✔ اتحمّلت نسخة GitHub';}
+      else if(c==='merge'){const m=ghMerge({settings:{},depts:null,map:null,excl:null,daysOff:null,data:[],closedD:{}},local,remote);m.depts=remote.depts;m.map=remote.map;m.excl=remote.excl;m.daysOff=remote.daysOff;applyState(m,true);msg='✔ اتدمجت الصفوف الجديدة من الاتنين — اضغط 💾 لرفعها';}
+      else msg='احتفظنا بنسخة الجهاز — اضغط 💾 لرفعها (هتستبدل اللي على GitHub)';}
+    setBase(R0.txt);ghLast=new Date();pill();if(msg){if(hasLocal||manual)toast(msg);render();}else if(manual)toast('✔ متزامن — مفيش جديد على GitHub');
+  }catch(e){pill();if(manual)toast('⚠ تعذر الاتصال بـ GitHub: '+e.message,'warn');}finally{ghBusy=false;}}
 async function ghSave(){if(ghBusy)return;ghBusy=true;const bk=$('#bk');bk.disabled=true;
-  try{const t=await ghToken();if(!t)return;const url=`https://api.github.com/repos/${GHC.owner}/${GHC.repo}/contents/${GHC.path}`,H={Authorization:'Bearer '+t,Accept:'application/vnd.github+json'},content=b64u(ser());
-    for(let at=0;at<2;at++){let sha;const g=await fetch(`${url}?ref=${GHC.branch}&t=${Date.now()}`,{headers:H,cache:'no-store'});
-      if(g.status===200)sha=(await g.json()).sha;else if(g.status!==404){if(g.status===401){localStorage.removeItem('gh_token');toast('⚠ الـ Token غلط أو منتهي — تم مسح. اضغط حفظ وحط Token جديد','warn');}else toast(`⚠ GitHub رد ${g.status} — راجع إن الـ Token ليه صلاحية Contents: Read and write على الريبو ${GHC.repo}`,'warn');return;}
-      const p=await fetch(url,{method:'PUT',headers:H,body:JSON.stringify(Object.assign({message:'تحديث البيانات '+new Date().toISOString().slice(0,16),content,branch:GHC.branch},sha?{sha}:{}))});
-      if(p.ok){ghMark(false);lastSave=new Date();toast('✔ تم حفظ على GitHub — التي بيفتح الموقع هيشوفه خلال دقيقة تقريبًا');return;}
-      if((p.status===409||p.status===422)&&at===0)continue;
+  try{const t=await ghToken();if(!t)return;const url=`https://api.github.com/repos/${GHC.owner}/${GHC.repo}/contents/${GHC.path}`,H={Authorization:'Bearer '+t,Accept:'application/vnd.github+json'};
+    for(let at=0;at<3;at++){let sha,remoteTxt=null;const g=await fetch(`${url}?ref=${GHC.branch}&t=${Date.now()}`,{headers:H,cache:'no-store'});
+      if(g.status===200){const j=await g.json();sha=j.sha;if(j.content)remoteTxt=b64d(j.content);else{const rr=await fetch(`${url}?ref=${GHC.branch}&t=${Date.now()}`,{headers:Object.assign({},H,{Accept:'application/vnd.github.raw+json'}),cache:'no-store'});remoteTxt=await rr.text();}}
+      else if(g.status!==404){if(g.status===401){localStorage.removeItem('gh_token');toast('⚠ الـ Token غلط أو منتهي — تم مسحه. اضغط حفظ وحط Token جديد','warn');}else toast(`⚠ GitHub رد ${g.status} — راجع إن الـ Token ليه صلاحية Contents: Read and write على الريبو ${GHC.repo}`,'warn');return;}
+      if(remoteTxt!==null){const remote=parseState(remoteTxt),base=getBase();
+        if(!base){ghBusy=false;await ghInit(true);ghBusy=true;continue;}
+        if(stable(base)!==stable(remote)){const m=ghMerge(base,rawOf(),remote);applyState(m,true);toast('اتدمجت تعديلات جديدة من GitHub قبل الرفع');}
+        else if(stable(rawOf())===stable(remote)){setBase(remoteTxt);ghLast=new Date();toast('✔ مفيش تعديلات جديدة للرفع — كله متزامن');render();return;}}
+      const out=ser(),p=await fetch(url,{method:'PUT',headers:H,body:JSON.stringify(Object.assign({message:'تحديث البيانات '+new Date().toISOString().slice(0,16),content:b64u(out),branch:GHC.branch},sha?{sha}:{}))});
+      if(p.ok){setBase(out);ghLast=new Date();toast('✔ تم الحفظ على GitHub — أي جهاز تاني هيشوفه أول ما يفتح أو يضغط ⟳ مزامنة');render();return;}
+      if((p.status===409||p.status===422)&&at<2)continue;
       if(p.status===401||p.status===403||p.status===404){if(p.status===401)localStorage.removeItem('gh_token');toast(`⚠ GitHub رفض الحفظ (${p.status}) — راجع صلاحية الـ Token على الريبو`,'warn');}else toast(`⚠ فشل الحفظ (${p.status})`,'warn');return;}
   }catch(e){toast('⚠ تعذر الاتصال بـ GitHub: '+e.message,'warn');}finally{ghBusy=false;bk.disabled=false;}}
-async function ghInit(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});if(r.status===404){ghMark(true);toast('بعد لا يوجد data.json على GitHub — اضغط حفظ على GitHub عشان ترفع البيانات','warn');return;}if(!r.ok)throw new Error(r.status);
-    const txt=await r.text();if(ghDirty){toast('⚠ عندك تعديلات لم تم حفظتش على GitHub — معروضة نسختك. اضغط 💾 عشان ترفعها.','warn');pill();return;}applyJson(txt,true);render();}catch(e){pill();}}
+document.addEventListener('visibilitychange',()=>{if(!GHC||document.visibilityState!=='visible'||Date.now()-ghLastPull<20000)return;if(document.querySelector('.modal'))return;try{if(typeof BO!=='undefined'&&Object.values(BO.dr).some(v=>String(v)!==''))return;}catch(e){}ghInit(false);});
 window.addEventListener('beforeunload',e=>{if(GHC&&ghDirty){e.preventDefault();e.returnValue='';}});
 
 const EDIT_TABS=['entry','map','set','data','close'];
@@ -1288,7 +1332,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   /* two-row table headers: keep the 2nd header row stuck right under the 1st (no overlap while scrolling) */
 function fixHeads(){$$('table.kt thead').forEach(t=>{const r=t.rows;if(r.length<2)return;const h=r[0].getBoundingClientRect().height;if(!h)return;[...r[1].cells].forEach(c=>{c.style.top=h+'px';});});}
 const setHH=()=>{const h=document.querySelector('header');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px');};setHH();window.addEventListener('resize',setHH);if(window.ResizeObserver&&document.querySelector('header'))new ResizeObserver(setHH).observe(document.querySelector('header'));
-(function(){const h=document.querySelector('header');if(h){const b=document.createElement('button');b.id='pk';b.title='بحث سريع (Ctrl+K)';b.innerHTML='بحث سريع <span class="kbd">Ctrl K</span>';b.onclick=openPalette;h.appendChild(b);const t=document.createElement('button');t.id='sbt';t.title='طي / توسيع القايمة الجانبية';t.textContent='☰';t.onclick=()=>{document.body.classList.toggle('sbc');try{localStorage.setItem('jv_sbc',document.body.classList.contains('sbc')?'1':'0');}catch(e){}};h.appendChild(t);}
+(function(){const h=document.querySelector('header');if(h){const b=document.createElement('button');b.id='pk';b.title='بحث سريع (Ctrl+K)';b.innerHTML='بحث سريع <span class="kbd">Ctrl K</span>';b.onclick=openPalette;h.appendChild(b);if(GHC){const sy=document.createElement('button');sy.id='gsync';sy.title='سحب آخر داتا من GitHub ودمجها';sy.textContent='⟳ مزامنة';sy.onclick=()=>ghInit(true);h.appendChild(sy);}const t=document.createElement('button');t.id='sbt';t.title='طي / توسيع القايمة الجانبية';t.textContent='☰';t.onclick=()=>{document.body.classList.toggle('sbc');try{localStorage.setItem('jv_sbc',document.body.classList.contains('sbc')?'1':'0');}catch(e){}};h.appendChild(t);}
 document.body.classList.add('sb');try{if(localStorage.getItem('jv_sbc')==='1')document.body.classList.add('sbc');}catch(e){}
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPalette();}});})();
 let fhT=0;const fhQ=()=>{cancelAnimationFrame(fhT);fhT=requestAnimationFrame(fixHeads);};
