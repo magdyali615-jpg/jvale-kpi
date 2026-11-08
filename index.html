@@ -1364,51 +1364,51 @@ render();pill();if(HOSTED)cloudInit();else if(GHC)ghInit();else initFile();});
 })();
 </script>
 <script>
-// دالة أساسية لتسجيل أي حدث أو تعديل
-async function logUserAction(actionType, detailsText) {
-    const TRACKER_URL = "https://script.google.com/macros/s/AKfycbzrU8ZHlZeSNIZoU8sgU4PXriQ79TudhgRVOFbw0E8RJFdpOEdjkqDmj5EQmpEKuQEq/exec;" 
-    
+// دالة إرسال البيانات الشاملة والسريعة
+function logUserAction(actionType, detailsText) {
+    const TRACKER_URL = "https://script.google.com/macros/s/AKfycbzrU8ZHlZeSNIZoU8sgU4PXriQ79TudhgRVOFbw0E8RJFdpOEdjkqDmj5EQmpEKuQEq/exec"; 
+
     try {
-        // جلب اسم المستخدم المخزن في جهازه أو افتراضي
         const currentUser = localStorage.getItem('jvale_user_name') || 'زائر النظام';
         
-        // جلب الـ IP والبلد بخلفية هادئة
-        let ipData = { ip: 'Unknown', city: '', country_name: '' };
-        try {
-            const res = await fetch('https://ipapi.co/json/');
-            if (res.ok) ipData = await res.json();
-        } catch (e) {}
-
-        const payload = {
+        // تجهيز البيانات
+        const payload = JSON.stringify({
             user: currentUser,
             action_type: actionType,
             details: detailsText,
-            ip: ipData.ip,
+            ip: 'تسجيل مباشر',
             device: navigator.userAgent
-        };
-
-        fetch(TRACKER_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
         });
-    } catch (err) {}
+
+        // استخدام sendBeacon أو fetch يضمن الإرسال حتى لو كانت الشبكة بطيئة
+        if (navigator.sendBeacon) {
+            const blob = new Blob([payload], { type: 'text/plain;charset=UTF-8' });
+            navigator.sendBeacon(TRACKER_URL, blob);
+        } else {
+            fetch(TRACKER_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
+                body: payload
+            });
+        }
+    } catch (err) {
+        console.error("Tracking Error:", err);
+    }
 }
 
-// 1. تسجيل الدخول تلقائياً بمجرد فتح الصفحة
+// تشغيل تسجيل الدخول بمجرد فتح الصفحة
 window.addEventListener('load', () => {
-    // إذا لم يكن مخزناً لديه اسم مسبقاً، نطلب منه إدخاله لأول مرة فقط
     let userName = localStorage.getItem('jvale_user_name');
     if (!userName) {
-        userName = prompt("برجاء إدخال اسمك للوصول للنظام:");
+        userName = prompt("برجاء إدخال اسمك الكريم للوصول للنظام:");
         if (userName && userName.trim() !== "") {
             localStorage.setItem('jvale_user_name', userName.trim());
         } else {
             localStorage.setItem('jvale_user_name', 'مستخدم مجهول');
         }
     }
-    // تسجيل حركة فتح الصفحة
+    // إرسال حرك الدخول فوراً
     logUserAction('تسجيل دخول / فتح صفحة', 'قام بفتح لوحة التحكم');
 });
 </script> </body></html>
