@@ -438,12 +438,21 @@ function openPalette(){if($('#pal'))return;const sd=()=>S.settings.selDay,vi=()=
   m.onclick=e=>{if(e.target===m)close();};draw();q.focus();}
 function viewLog(){
   const depts=S.depts;
-  return `<div class="card"><h3>السجل اليومي — جميع المؤشرات لكل الأيام</h3><div class="row"><label>القسم</label><select id="fd"><option value="">كل الأقسام</option>${depts.map(d=>`<option>${esc(d)}</option>`).join('')}</select>
+  return `<div class="card hotc"><h3>سجل الإنتاج — الأصناف والصفوف المسجّلة (أي تاريخ)</h3>
+  <div class="row"><span class="seg" id="lgmode" style="margin:0;display:inline-flex;gap:6px"><button type="button" data-lgm="day">يوم</button><button type="button" data-lgm="range">فترة</button><button type="button" data-lgm="month">شهر</button><button type="button" data-lgm="all">كل البيانات</button></span>
+   <span id="lgday" class="row" style="margin:0"><button id="lgprev" type="button">◀</button><input type="date" id="lgd"><button id="lgnext" type="button">▶</button><button id="lglast" type="button">آخر يوم مسجل</button></span>
+   <span id="lgrng" class="row" style="margin:0"><label>من</label><input type="date" id="lgf"><label>إلى</label><input type="date" id="lgt"></span>
+   <span id="lgmon" class="row" style="margin:0"><button id="lgmp" type="button">◀</button><input type="month" id="lgm"><button id="lgmn" type="button">▶</button></span></div>
+  <div class="row"><label>القسم</label><select id="lgdp"><option value="">كل الأقسام</option>${depts.map(d=>`<option ${d===LG.dept?'selected':''}>${esc(d)}</option>`).join('')}</select><input id="lgq" placeholder="🔍 صنف أو ماكينة" style="width:220px" value="${esc(LG.q)}">
+   <span class="seg" id="lgview" style="margin:0;display:inline-flex;gap:6px"><button type="button" data-lgv="prod">حسب الصنف</button><button type="button" data-lgv="wc">حسب الماكينة</button><button type="button" data-lgv="rows">كل الصفوف (تعديل مباشر)</button></span><label><input type="checkbox" id="lgx" ${LG.more?'checked':''}> الأعمدة الإضافية</label>
+   <button id="lgcp" type="button">نسخ بصيغة Data</button><button id="lgxl" type="button">Excel للعرض</button><button id="lgxa" type="button">Excel لكل البيانات</button></div>
+  <div id="lgsum" class="trk-sum"></div><div id="lgres"></div></div>
+  <div class="card"><h3>مؤشرات كل يوم — حسب القسم</h3><div class="row"><label>القسم</label><select id="fd"><option value="">كل الأقسام</option>${depts.map(d=>`<option>${esc(d)}</option>`).join('')}</select>
   <label>من</label><input type="date" id="ff"><label>إلى</label><input type="date" id="ft"><button id="xl">تنزيل Excel</button></div>
   ${copyBar()}<div id="logt"></div></div>`;}
 function logRows(){const fd=$('#fd').value,ff=isoToSer($('#ff').value),ft=isoToSer($('#ft').value);
   return R.log.filter(r=>(!fd||r.dept===fd)&&(!ff||r.day>=ff)&&(!ft||r.day<=ft));}
-function bindLog(){const draw=()=>{const rows=logRows();let h=`<div class="tw"><table class="kt"><thead><tr><th rowspan="2">التاريخ</th><th rowspan="2">القسم</th><th colspan="3">① استغلال الطاقة</th><th colspan="3">② الأداء</th><th colspan="3">③ التوافر</th></tr><tr>${COLS.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>`;
+function bindLog(){bindLG();const draw=()=>{const rows=logRows();let h=`<div class="tw"><table class="kt"><thead><tr><th rowspan="2">التاريخ</th><th rowspan="2">القسم</th><th colspan="3">① استغلال الطاقة</th><th colspan="3">② الأداء</th><th colspan="3">③ التوافر</th></tr><tr>${COLS.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>`;
     for(const r of rows) h+=`<tr><td>${iso(r.day)}</td><td class="dn">${esc(r.dept)}</td>${COLS.map(([k])=>{const v=r[k];return (k==='u'||k==='p'||k==='a')?`<td class="pct ${cls(v,TGT[k])}">${pc(v)}</td>`:`<td>${fn(v)}</td>`;}).join('')}</tr>`;
     $('#logt').innerHTML=h+`</tbody></table></div><p class="muted">${rows.length} صف</p>`;};
   ['#fd','#ff','#ft'].forEach(s=>$(s).onchange=draw);draw();bindCopy($('#view'),logRows,true);
@@ -755,32 +764,54 @@ function drawDrawer(){const el=$('#bdrawer');if(!el)return;const d=entryDay(),m=
     $$('input',rw).forEach(inp=>inp.onchange=()=>{if(inp.dataset.bk){const k=inp.dataset.bk;r[k]=(k==='prod')?inp.value:(+inp.value||0);}else{r.x=r.x||{};r.x[inp.dataset.bx]=inp.value||undefined;}
       if(r.x&&r.x.draft&&(+r.qty||+r.hrs))delete r.x.draft;save();recompute();redraw();});
     rw.querySelector('[data-bdel]').onclick=()=>{const k=S.data.indexOf(r);if(k<0)return;S.data.splice(k,1);save();recompute();redraw();undoToast(`اتحذف: ${r.wc} — ${r.prod||'—'}`,()=>{S.data.splice(Math.min(k,S.data.length),0,r);save();recompute();redraw();});};});}
-/* ---------- recorded items panel: today's items, or find any item in any period ---------- */
-const PS={mode:'day',q:'',per:'month',f:null,t:null,lim:30};
-function psRange(){const d=entryDay();if(PS.mode==='day'||PS.per==='day')return [d,d];if(PS.per==='7')return [d-6,d];if(PS.per==='month')return [calFirst(d),calEom(d)];if(PS.per==='all')return [-1e9,1e9];const a=PS.f==null?d:PS.f,b=PS.t==null?d:PS.t;return a<=b?[a,b]:[b,a];}
-function drawPS(){const res=$('#psres');if(!res)return;const [a,b]=psRange(),qt=stoks(PS.q);
-  $$('#pspan [data-psm]').forEach(x=>x.classList.toggle('pri',x.dataset.psm===PS.mode));$('#psper').style.display=PS.mode==='find'?'flex':'none';$('#psr').style.display=PS.mode==='find'&&PS.per==='rng'?'flex':'none';
-  let rows=S.data.filter(r=>r.day>=a&&r.day<=b&&!isStop(r)&&K.norm(r.prod)&&!(r.x&&r.x.draft&&!(+r.qty||+r.hrs)));
-  if(qt.length)rows=rows.filter(r=>matchScore(qt,stoksC(String(r.prod).trim()),0.75)>0);
-  const g=new Map();rows.forEach(r=>{const k=K.norm(r.prod);let x=g.get(k);if(!x)g.set(k,x={name:String(r.prod).trim(),qty:0,hrs:0,rows:[],wcs:new Map(),days:new Set()});x.qty+=+r.qty||0;x.hrs+=+r.hrs||0;x.rows.push(r);x.days.add(r.day);x.wcs.set(K.norm(r.wc),r.wc);});
-  const L=[...g.values()].sort((x,y)=>y.qty-x.qty);
-  $('#pssum').textContent=`${L.length} صنف — ${rows.length} تسجيل — ${new Set(rows.map(r=>K.norm(r.wc))).size} مركز عمل — إجمالي الكمية ${r2(rows.reduce((s,r)=>s+(+r.qty||0),0))} — ${a<-1e8?'كل البيانات':'الفترة '+iso(a)+(b!==a?' → '+iso(b):'')}`;
-  const open=PS.mode==='day'||L.length<=3;
-  res.innerHTML=(L.length?L.slice(0,PS.lim).map(x=>`<details class="chk info" ${open?'open':''}><summary><b>${esc(x.name)}</b> — كمية <b>${r2(x.qty)}</b> — شغل ${r2(x.hrs)} س — ${x.wcs.size} مركز عمل${x.days.size>1?' — '+x.days.size+' يوم':''} <span class="muted">(${esc([...x.wcs.values()].slice(0,4).join('، '))}${x.wcs.size>4?'…':''})</span></summary>
-    <div class="tw"><table class="kt"><thead><tr><th>اليوم</th><th>مركز العمل</th><th>الكمية</th><th>ساعات</th><th>ث/قطعة</th><th></th></tr></thead><tbody>${x.rows.slice().sort((p,q)=>q.day-p.day||String(p.wc).localeCompare(String(q.wc))).map(r=>`<tr><td>${iso(r.day)}</td><td class="dn">${esc(r.wc)}</td><td>${r2(+r.qty||0)}</td><td>${r2(+r.hrs||0)}</td><td>${r.cyc||'—'}</td><td><button type="button" class="mini" data-psopen="${S.data.indexOf(r)}">فتح وتعديل</button></td></tr>`).join('')}</tbody></table></div></details>`).join('')+(L.length>PS.lim?`<div class="row"><button type="button" id="psmore" class="pri">عرض ${Math.min(30,L.length-PS.lim)} كمان</button><span class="muted">باقي ${L.length-PS.lim}</span></div>`:''):'<p class="muted">مفيش أصناف بالفلاتر دي في الفترة دي</p>');
-  $$('#psres [data-psopen]').forEach(btn=>btn.onclick=()=>{const r=S.data[+btn.dataset.psopen];if(!r)return;EN.day=r.day;S.settings.lastEntryDay=r.day;save();const ed=$('#eday');if(ed)ed.value=iso(r.day);BO.sel=K.norm(r.wc);BO.dr={prod:'',cyc:'',qty:'',hrs:'',cs:''};drawProducts();drawEntrySummary();drawEntryRows();$('#bgrid').scrollIntoView({behavior:'smooth',block:'start'});toast(`اتفتح ${r.wc} — ${iso(r.day)} — عدّل من الدرج`);});
-  const mo=$('#psmore');if(mo)mo.onclick=()=>{PS.lim+=30;drawPS();};}
-function bindPS(){$$('#pspan [data-psm]').forEach(b=>b.onclick=()=>{PS.mode=b.dataset.psm;PS.lim=30;drawPS();});
-  $('#psq').oninput=e=>{PS.q=e.target.value;PS.lim=30;drawPS();};$('#psp').value=PS.per;$('#psp').onchange=e=>{PS.per=e.target.value;PS.lim=30;drawPS();};
-  $('#psf').onchange=e=>{PS.f=isoToSer(e.target.value)||null;drawPS();};$('#pst').onchange=e=>{PS.t=isoToSer(e.target.value)||null;drawPS();};}
-function bindBoard(){bindPS();$('#bdept').onchange=e=>{BO.dept=e.target.value;drawBoard();};$('#bq').oninput=e=>{BO.q=e.target.value;drawBoard();};}
+/* ---------- production log (السجل اليومي): any date / range / month, by item, by machine, or editable rows ---------- */
+const LG={mode:'day',d:null,f:null,t:null,dept:'',q:'',view:'prod',lim:40,more:false};
+const lgDay=()=>LG.d==null?entryDay():LG.d;
+function lgRange(){const d=lgDay();if(LG.mode==='day')return [d,d];if(LG.mode==='month')return [calFirst(d),calEom(d)];if(LG.mode==='all')return [-1e9,1e9];const a=LG.f==null?d:LG.f,b=LG.t==null?d:LG.t;return a<=b?[a,b]:[b,a];}
+function lgRows(){const [a,b]=lgRange(),qn=stoks(LG.q);let rows=S.data.filter(r=>r.day>=a&&r.day<=b&&!(r.x&&r.x.draft&&!(+r.qty||+r.hrs)));
+  if(LG.dept)rows=rows.filter(r=>deptOfN(K.norm(r.wc))===LG.dept);
+  if(qn.length)rows=rows.filter(r=>matchScore(qn,stoksC(String(r.prod)+' '+String(r.wc)),0.75)>0);return rows;}
+function lgOpen(r){EN.day=r.day;S.settings.lastEntryDay=r.day;save();BO.sel=K.norm(r.wc);BO.dr={prod:'',cyc:'',qty:'',hrs:'',cs:''};tab='entry';render();toast(`اتفتح ${r.wc} — ${iso(r.day)} في صفحة الإدخال`);}
+function drawLG(){const res=$('#lgres');if(!res)return;const [a,b]=lgRange(),rows=lgRows(),idx=new Map(S.data.map((r,i)=>[r,i]));
+  $$('#lgmode [data-lgm]').forEach(x=>x.classList.toggle('pri',x.dataset.lgm===LG.mode));$$('#lgview [data-lgv]').forEach(x=>x.classList.toggle('pri',x.dataset.lgv===LG.view));
+  $('#lgday').style.display=LG.mode==='day'?'flex':'none';$('#lgrng').style.display=LG.mode==='range'?'flex':'none';$('#lgmon').style.display=LG.mode==='month'?'flex':'none';
+  if(LG.mode==='day')$('#lgd').value=iso(a);if(LG.mode==='month')$('#lgm').value=iso(a).slice(0,7);if(LG.mode==='range'){$('#lgf').value=iso(a);$('#lgt').value=iso(b);}
+  const prod=rows.filter(r=>!isStop(r)&&K.norm(r.prod)),stop=rows.filter(isStop),sum=(l,k)=>l.reduce((s,r)=>s+(+r[k]||0),0);
+  const tile=(n,l)=>`<div class="tile"><b>${n}</b><span>${l}</span></div>`;
+  $('#lgsum').innerHTML=tile(rows.length,'تسجيل')+tile(new Set(prod.map(r=>K.norm(r.prod))).size,'صنف')+tile(new Set(rows.map(r=>K.norm(r.wc))).size,'مركز عمل')+tile(r2(sum(prod,'qty')),'إجمالي الكمية')+tile(r2(sum(prod,'hrs')),'ساعات شغل')+tile(r2(sum(stop,'hrs')),'ساعات توقف مسجّلة')+tile(LG.mode==='day'?WEEKN[K.serToDate(a).getUTCDay()]:LG.mode==='all'?'كل البيانات':iso(a)+' → '+iso(b).slice(5),LG.mode==='day'?iso(a):'الفترة');
+  const tbl=(l)=>`<div class="tw"><table class="kt"><thead><tr><th>اليوم</th><th>${l[0]}</th><th>الكمية</th><th>ساعات</th><th>ث/قطعة</th><th></th></tr></thead><tbody>${l[1].map(r=>`<tr><td>${iso(r.day)}</td><td class="dn">${esc(l[2]==='wc'?(isStop(r)?'توقف'+((r.x&&r.x.cs)?' — '+r.x.cs:''):r.prod):r.wc)}</td><td>${r2(+r.qty||0)}</td><td>${r2(+r.hrs||0)}</td><td>${r.cyc||'—'}</td><td><button type="button" class="mini" data-lgopen="${idx.get(r)}">فتح في الإدخال</button></td></tr>`).join('')}</tbody></table></div>`;
+  const byDate=l=>l.slice().sort((p,q)=>q.day-p.day||String(p.wc).localeCompare(String(q.wc)));let h='';
+  if(LG.view==='prod'){const g=new Map();prod.forEach(r=>{const k=K.norm(r.prod);let x=g.get(k);if(!x)g.set(k,x={name:String(r.prod).trim(),qty:0,hrs:0,rows:[],wcs:new Map(),days:new Set()});x.qty+=+r.qty||0;x.hrs+=+r.hrs||0;x.rows.push(r);x.days.add(r.day);x.wcs.set(K.norm(r.wc),r.wc);});
+    const L=[...g.values()].sort((x,y)=>y.qty-x.qty),open=LG.mode==='day'||L.length<=3;
+    h=L.slice(0,LG.lim).map(x=>`<details class="chk info" ${open?'open':''}><summary><b>${esc(x.name)}</b> — كمية <b>${r2(x.qty)}</b> — شغل ${r2(x.hrs)} س — ${x.wcs.size} مركز${x.days.size>1?' — '+x.days.size+' يوم':''} <span class="muted">(${esc([...x.wcs.values()].slice(0,4).join('، '))}${x.wcs.size>4?'…':''})</span></summary>${tbl(['مركز العمل',byDate(x.rows),'prod'])}</details>`).join('')+(L.length>LG.lim?`<div class="row"><button type="button" class="pri" id="lgmore">عرض كمان</button><span class="muted">باقي ${L.length-LG.lim} صنف</span></div>`:'');}
+  else if(LG.view==='wc'){const g=new Map();rows.forEach(r=>{const k=K.norm(r.wc);let x=g.get(k);if(!x)g.set(k,x={wc:r.wc,dept:deptOfN(k)||'غير مُسند',qty:0,run:0,stop:0,rows:[]});x.rows.push(r);const hh=+r.hrs||0;if(isStop(r))x.stop+=hh;else{x.run+=hh;x.qty+=+r.qty||0;}});
+    const ord=dp=>{const i=S.depts.indexOf(dp);return i<0?99:i;},dg=new Map();[...g.values()].forEach(x=>{if(!dg.has(x.dept))dg.set(x.dept,[]);dg.get(x.dept).push(x);});
+    h=[...dg.entries()].sort((p,q)=>ord(p[0])-ord(q[0])).map(([dp,l])=>`<div class="bdh">${esc(dp)} <span class="muted">${l.length} مركز</span></div>`+l.sort((p,q)=>String(p.wc).localeCompare(String(q.wc))).map(x=>`<details class="chk info" ${LG.mode==='day'?'open':''}><summary><b>${esc(x.wc)}</b> — ${x.rows.length} تسجيل — كمية <b>${r2(x.qty)}</b> — شغل ${r2(x.run)} س${x.stop?' — توقف '+r2(x.stop)+' س':''}</summary>${tbl(['الصنف',byDate(x.rows),'wc'])}</details>`).join('')).join('');}
+  else{const L=byDate(rows),more=LG.more;
+    h=`<div class="tw"><table class="kt" id="lgtab"><thead><tr><th>اليوم</th><th>الأسبوع</th><th>Work center</th><th>Product</th><th>ث/قطعة</th><th>الكمية</th><th>ساعات</th>${more?XF.map(x=>`<th>${x[1]}</th>`).join(''):''}<th></th></tr></thead><tbody>${L.slice(0,LG.lim).map(r=>{const dr=r.x&&r.x.draft,x=r.x||{},st=isStop(r);return `<tr data-ix="${idx.get(r)}" class="${dr?'draft':''}"><td>${iso(r.day)}</td><td class="muted">${WEEK(r.day)}</td><td><input data-k="wc" class="w" value="${esc(r.wc)}"></td><td><input data-k="prod" class="w" value="${esc(r.prod)}" ${st?'readonly':''}></td><td><input data-k="cyc" type="number" step="any" style="width:80px" value="${r.cyc||''}"></td><td><input data-k="qty" type="number" step="any" style="width:90px" value="${dr&&!r.qty?'':r.qty}"></td><td><input data-k="hrs" type="number" step="any" style="width:80px" value="${dr&&!r.hrs?'':r.hrs}"></td>${more?XF.map(([k,l,t])=>`<td><input data-x="${k}" type="${t}" style="width:${t==='text'?120:80}px" value="${x[k]==null?'':esc(x[k])}"></td>`).join(''):''}<td style="white-space:nowrap"><button type="button" class="mini" data-lgopen="${idx.get(r)}">فتح في الإدخال</button> <button type="button" class="mini del" data-lgdel="${idx.get(r)}">حذف</button></td></tr>`;}).join('')}</tbody></table></div>`+(L.length>LG.lim?`<div class="row"><button type="button" class="pri" id="lgmore">عرض ${Math.min(60,L.length-LG.lim)} كمان</button><span class="muted">باقي ${L.length-LG.lim} صف</span></div>`:'');}
+  res.innerHTML=h||'<p class="muted">مفيش تسجيلات في الفترة والفلاتر دي</p>';
+  $$('#lgres [data-lgopen]').forEach(x=>x.onclick=()=>{const r=S.data[+x.dataset.lgopen];if(r)lgOpen(r);});
+  const mo=$('#lgmore');if(mo)mo.onclick=()=>{LG.lim+=LG.view==='rows'?60:40;drawLG();};
+  $$('#lgtab input').forEach(el=>el.onchange=()=>{const r=S.data[+el.closest('tr').dataset.ix];if(!r)return;
+    if(el.dataset.k){const k=el.dataset.k;r[k]=(k==='cyc'||k==='qty'||k==='hrs')?(+el.value||0):el.value;}else{r.x=r.x||{};const t=el.type;r.x[el.dataset.x]=el.value===''?undefined:(t==='number'?+el.value:el.value);}
+    if(r.x&&r.x.draft&&(+r.qty||+r.hrs))delete r.x.draft;save();recompute();drawLG();});
+  $$('#lgtab [data-lgdel]').forEach(x=>x.onclick=()=>{const k=+x.dataset.lgdel,r=S.data[k];if(!r)return;S.data.splice(k,1);save();recompute();drawLG();undoToast(`اتحذف: ${r.wc} — ${r.prod||'—'} — ${iso(r.day)}`,()=>{S.data.splice(Math.min(k,S.data.length),0,r);save();recompute();drawLG();});});}
+function bindLG(){const redo=()=>{LG.lim=LG.view==='rows'?60:40;drawLG();};
+  $$('#lgmode [data-lgm]').forEach(b=>b.onclick=()=>{LG.mode=b.dataset.lgm;redo();});$$('#lgview [data-lgv]').forEach(b=>b.onclick=()=>{LG.view=b.dataset.lgv;redo();});
+  $('#lgd').onchange=e=>{const v=isoToSer(e.target.value);if(v){LG.d=v;drawLG();}};$('#lgprev').onclick=()=>{LG.d=lgDay()-1;drawLG();};$('#lgnext').onclick=()=>{LG.d=lgDay()+1;drawLG();};
+  $('#lglast').onclick=()=>{const ds=S.data.map(r=>r.day);if(ds.length){LG.d=Math.max(...ds);drawLG();}};
+  $('#lgf').onchange=e=>{LG.f=isoToSer(e.target.value)||null;drawLG();};$('#lgt').onchange=e=>{LG.t=isoToSer(e.target.value)||null;drawLG();};
+  $('#lgm').onchange=e=>{const v=isoToSer(e.target.value+'-01');if(v){LG.d=v;drawLG();}};$('#lgmp').onclick=()=>{LG.d=calFirst(lgDay())-1;drawLG();};$('#lgmn').onclick=()=>{LG.d=calEom(lgDay())+1;drawLG();};
+  $('#lgdp').onchange=e=>{LG.dept=e.target.value;redo();};$('#lgq').oninput=e=>{LG.q=e.target.value;redo();};$('#lgx').onchange=e=>{LG.more=e.target.checked;drawLG();};
+  $('#lgcp').onclick=()=>copy(dataFormatRows(lgRows().filter(r=>!(r.x&&r.x.draft))).map(r=>r.join('\t')).join('\n'),'صفوف الفترة بصيغة Data');
+  const xl=rows=>{const dr=dataFormatRows(rows.filter(r=>!(r.x&&r.x.draft))),ws=XLSX.utils.aoa_to_sheet([DHEAD].concat(dr));dr.forEach((r,i)=>{[[1,'yyyy-mm-dd'],[3,'yyyy-mm-dd']].forEach(([c,z])=>{const ad=XLSX.utils.encode_cell({r:i+1,c}),s=isoToSer(r[c]);if(s)ws[ad]={t:'n',v:s,z};});});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Data');saveXlsx(wb,'KPI_Data.xlsx');};
+  $('#lgxl').onclick=()=>xl(lgRows());$('#lgxa').onclick=()=>xl(S.data);drawLG();}
+function bindBoard(){$('#bdept').onchange=e=>{BO.dept=e.target.value;drawBoard();};$('#bq').oninput=e=>{BO.q=e.target.value;drawBoard();};}
 function viewEntry(){const d=entryDay();
   return `<div class="card hotc"><div class="row"><h3 style="margin:0">تسجيل البيانات</h3><label>اليوم</label><button id="dprev">◀</button><input type="date" id="eday" value="${iso(d)}"><button id="dnext">▶</button><button id="dlast">آخر يوم مسجل</button><span id="esum" class="muted"></span><span style="flex:1"></span><button id="fprep">تجهيز اليوم من يوم سابق</button><button id="fclr" class="del">حذف المسودات الفاضية</button></div>
   <div class="eprog"><div class="hb2"><i id="epb"></i></div><span id="ept" class="muted"></span></div></div>
   <div class="card"><div class="row"><h3 style="margin:0">لوحة الماكينات</h3><select id="bdept"></select><input id="bq" placeholder="🔍 ماكينة" style="width:170px"><span id="bst" class="row" style="margin:0"></span></div>
    <div class="board"><div id="bgrid"></div><div id="bdrawer" class="drawer"></div></div></div>
-  <div class="card"><div class="row"><h3 style="margin:0">الأصناف المسجّلة</h3><span class="seg" id="pspan" style="margin:0;display:inline-flex;gap:6px"><button type="button" data-psm="day" class="pri">أصناف اليوم</button><button type="button" data-psm="find">دوّر على صنف في أي وقت</button></span><input id="psq" placeholder="🔍 اسم الصنف (أو جزء منه)" style="width:230px"><span id="psper" class="row" style="margin:0;display:none"><label>الفترة</label><select id="psp"><option value="day">اليوم المختار</option><option value="7">آخر 7 أيام</option><option value="month">الشهر المختار</option><option value="all">كل البيانات</option><option value="rng">فترة محددة</option></select><span id="psr" class="row" style="margin:0;display:none"><input type="date" id="psf"><input type="date" id="pst"></span></span></div>
-   <div id="pssum" class="muted" style="margin:8px 0"></div><div id="psres"></div></div>
   <details class="card"><summary><b>إدخال متقدّم</b> <span class="muted">— ماكينة جديدة مش في الخريطة، setup / changeover / breakdown، تكرار آخر صف</span></summary>
   <div class="fgrid"><div><label>Work center</label><input id="fwc" list="dl_ewc" autocomplete="off" placeholder="أدخل أو اختار"></div>
    <div><label>Product (الصنف)</label><input id="fpr" list="dl_epr" autocomplete="off" placeholder="الصنف"></div>
@@ -793,11 +824,9 @@ function viewEntry(){const d=entryDay();
   <div class="row"><button id="fmore">حقول إضافية (setup / changeover / breakdown / الأسباب)</button><span id="fxs" style="display:none;gap:8px;flex-wrap:wrap" class="row">${XF.map(([k,l,t])=>`<input data-x="${k}" type="${t}" placeholder="${l}" style="width:${t==='text'?170:120}px">`).join('')}</span></div>
   <div class="bar"><button id="fstop">تسجيل توقف (مركز عمل + سبب)</button><button id="fdup">تكرار آخر صف</button><button id="fprep">تجهيز اليوم من يوم سابق</button><button id="fclr" class="del">حذف المسودات الفارغة</button></div></div>
   
-  </details>
-  <div class="card"><div class="row"><h3 style="margin:0">كل صفوف اليوم (بنفس أعمدة شيت Data) — عدّل أي خانة مباشرة</h3><input id="efil" placeholder="🔍 فلتر بمركز العمل أو الصنف" style="width:230px"><label><input type="checkbox" id="exc"> الأعمدة الإضافية</label>
-   <button id="ecp">نسخ صفوف اليوم (بصيغة Data)</button><button id="ecpa">نسخ كل البيانات</button><button id="exl">تصدير جميع البيانات (Excel)</button></div><div class="tw"><table class="kt" id="etab"></table></div></div>`;}
+  </details>`;}
 function drawEntrySummary(){const d=entryDay(),rows=dayRows(d).filter(r=>!(r.x&&r.x.draft)),wcs=new Set(rows.map(r=>K.norm(r.wc)));
-  $('#esum').textContent=`${rows.length} صف · ${wcs.size} مركز عمل مسجل`;drawBoard();drawDrawer();drawPS();}
+  $('#esum').textContent=`${rows.length} صف · ${wcs.size} مركز عمل مسجل`;drawBoard();drawDrawer();}
 function drawProducts(){const w=K.norm($('#fwc').value),a=mem().wc.get(w);const dl=$('#dl_epr');
   dl.innerHTML=a?[...a.prods.values()].sort((x,y)=>y.last-x.last||y.n-x.n).map(p=>`<option value="${esc(p.prod)}">${p.cyc?p.cyc+' ث':''}</option>`).join(''):'';}
 function onWc(){drawProducts();const w=K.norm($('#fwc').value);const known=S.map.some(m=>K.norm(m.name)===w);$('#fdept').style.display=(w&&!known)?'flex':'none';const a=mem().wc.get(w);
@@ -817,7 +846,7 @@ function addFromForm(){const d=entryDay(),wc=$('#fwc').value.trim(),prod=$('#fpr
   if(dayRows(d).some(r=>K.norm(r.wc)===K.norm(wc)&&K.norm(r.prod)===K.norm(prod)&&!(r.x&&r.x.draft)))w.push('فيه صف بنفس الماكينة والصنف في اليوم ده');
   addRow(o);if(w.length)toast('⚠ '+w.join(' — '),'warn');
   S.settings.lastEntryDay=d;$('#fpr').value='';$('#fqt').value='';$('#fhr').value='';$('#fcy').value='';$$('#fxs [data-x]').forEach(i=>i.value='');EN.auto=false;onWc();$('#fpr').focus();}
-function drawEntryRows(){const d=entryDay(),q=K.norm($('#efil')?$('#efil').value:''),more=$('#exc')&&$('#exc').checked;const all=dayRows(d);
+function drawEntryRows(){if(!$('#etab'))return;const d=entryDay(),q=K.norm($('#efil')?$('#efil').value:''),more=$('#exc')&&$('#exc').checked;const all=dayRows(d);
   const hd=['#','Work center','Month','Week','Day','Product','Theoritical cycle time Sec.','Actual Production','Model Working Time hours','Model Working Secs'].concat(more?XF.map(x=>x[1]):[]);
   let h=`<thead><tr>${hd.map(x=>`<th>${x}</th>`).join('')}<th></th></tr></thead><tbody>`;
   for(let i=all.length-1;i>=0;i--){const r=all[i];if(q&&!K.norm(r.wc+' '+r.prod).includes(q))continue;const dr=r.x&&r.x.draft,x=r.x||{};
@@ -840,7 +869,6 @@ function bindEntry(){const set=()=>{drawProducts();drawEntrySummary();drawEntryR
   $('#fpr').oninput=()=>{const p=K.norm($('#fpr').value);if(mem().wc.get(K.norm($('#fwc').value))&&mem().wc.get(K.norm($('#fwc').value)).prods.has(p))onProd();};
   ['fwc','fpr','fcy','fqt','fhr'].forEach(id=>$('#'+id).addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();if(id==='fpr')onProd();if(id==='fhr'||!focusNext(id))addFromForm();}));
   $('#fadd').onclick=addFromForm;$('#fmore').onclick=()=>{const s=$('#fxs');s.style.display=s.style.display==='none'?'flex':'none';};
-  $('#efil').oninput=drawEntryRows;$('#exc').onchange=drawEntryRows;
   $('#fstop').onclick=async()=>{const wc=$('#fwc').value.trim();if(!wc)return toast('أدخل أو اختر مركز العمل الأول','warn');const known=S.map.some(m=>K.norm(m.name)===K.norm(wc));if(!known)return toast('مركز العمل غير موجود في الخريطة — ضيفه الأول','warn');
     const c=await askText('سبب التوقف (اختياري)','لا يوجد اوردرات');if(c===null)return;addRow({wc,day:entryDay(),prod:'توقف',cyc:0,qty:0,hrs:S.settings.shift/60,x:c?{cs:c}:null});};
   $('#fdup').onclick=()=>{const r=dayRows(entryDay()).filter(x=>!(x.x&&x.x.draft)).pop();if(!r)return toast('لا يوجد صف نكرره','warn');$('#fwc').value=r.wc;onWc();$('#fpr').value=r.prod;$('#fcy').value=r.cyc||'';$('#fqt').value='';$('#fhr').value='';$('#fqt').focus();toast('تم نسخ مركز العمل والصنف وزمن الدورة — أدخل الكمية والساعات');};
@@ -849,11 +877,6 @@ function bindEntry(){const set=()=>{drawProducts();drawEntrySummary();drawEntryR
     const have=new Set(dayRows(d).map(r=>K.norm(r.wc)));let n=0;for(const r of S.data.filter(x=>x.day===src&&!(x.x&&x.x.draft)&&K.norm(x.prod)!=='توقف')){if(have.has(K.norm(r.wc)))continue;S.data.push({wc:r.wc,day:d,prod:r.prod,cyc:r.cyc,qty:0,hrs:0,x:{draft:1}});n++;}
     save();recompute();set();toast(`✔ تم تجهيز ${n} صف مسودة — أدخل الكمية والساعات للي اشتغل، والتي ماشتغلش سيبه (المسودات الفاضية مش تُحتسب)`);};
   $('#fclr').onclick=()=>{const n0=S.data.length;S.data=S.data.filter(r=>!(r.x&&r.x.draft&&!(+r.qty||+r.hrs)));save();recompute();set();toast(`✔ تم حذف ${n0-S.data.length} مسودة فاضية`);};
-  $('#ecp').onclick=()=>copy(dataFormatRows(dayRows(entryDay()).filter(r=>!(r.x&&r.x.draft))).map(r=>r.join('\t')).join('\n'),'صفوف اليوم بصيغة Data');
-  $('#ecpa').onclick=()=>copy(dataFormatRows(S.data.filter(r=>!(r.x&&r.x.draft))).map(r=>r.join('\t')).join('\n'),'كل البيانات بصيغة Data');
-  $('#exl').onclick=()=>{const rows=dataFormatRows(S.data.filter(r=>!(r.x&&r.x.draft)));const ws=XLSX.utils.aoa_to_sheet([DHEAD].concat(rows));
-    rows.forEach((r,i)=>{[[1,'yyyy-mm-dd'],[3,'yyyy-mm-dd']].forEach(([c,z])=>{const ad=XLSX.utils.encode_cell({r:i+1,c});const s=isoToSer(r[c]);if(s){ws[ad]={t:'n',v:s,z};}});});
-    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Data');saveXlsx(wb,'KPI_Data.xlsx');};
   bindBoard();set();}
 
 
