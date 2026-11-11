@@ -382,6 +382,45 @@ function bindMonth(){if(!$('#mtbox'))return;$('#mtm').value=MT.method;$('#mtb').
   const again=()=>{const y=window.scrollY;render();window.scrollTo(0,y);};
   $('#mtm').onchange=e=>{MT.method=e.target.value;again();};$('#mtb').onchange=e=>{MT.basis=e.target.value;drawMonth();};
   $('#mtfo').onclick=()=>{MT.col=new Set(R.monthTable().map((_,i)=>String(i)));drawMonth();};$('#mtun').onclick=()=>{MT.col=new Set();drawMonth();};drawMonth();}
+/* ---------- theme (auto / light / dark) ---------- */
+const THEME_KEY='jv_theme',THO=new WeakMap();
+function themeMode(){try{return localStorage.getItem(THEME_KEY)||'auto';}catch(e){return 'auto';}}
+function applyTheme(mode){
+  const walk=rs=>{for(const r of rs){if(r.type===4){const mt=THO.has(r)?THO.get(r):(THO.set(r,r.media.mediaText),r.media.mediaText);
+      const dark=/prefers-color-scheme\s*:\s*dark/.test(mt),light=/prefers-color-scheme\s*:\s*light/.test(mt);
+      if((dark||light)&&mt.replace(/\(prefers-color-scheme\s*:\s*(dark|light)\)/,'').trim()==='')r.media.mediaText=mode==='auto'?mt:((dark&&mode==='dark')||(light&&mode==='light'))?'all':'not all';}
+    if(r.cssRules&&r.type!==1)walk(r.cssRules);}};
+  for(const sh of document.styleSheets){let rs;try{rs=sh.cssRules;}catch(e){continue;}walk(rs);}
+  document.documentElement.style.colorScheme=mode==='auto'?'':mode;
+  const b=$('#thm');if(b){b.textContent=mode==='dark'?'☾ داكن':mode==='light'?'☀ فاتح':'◐ تلقائي';b.title='المظهر: '+(mode==='dark'?'داكن':mode==='light'?'فاتح':'تلقائي (حسب إعداد الجهاز)')+' — اضغط للتبديل';}}
+function cycleTheme(){const m=themeMode(),n=m==='auto'?'light':m==='light'?'dark':'auto';try{localStorage.setItem(THEME_KEY,n);}catch(e){}applyTheme(n);toast('المظهر: '+(n==='dark'?'داكن':n==='light'?'فاتح':'تلقائي'));}
+/* ---------- admin mode: hide selected tabs from regular users (UI-level lock, PIN kept as a hash) ---------- */
+const ADK='jv_admin';
+function sha256(ascii){function r(n,x){return(x>>>n)|(x<<(32-n));}var m=Math.pow,mx=m(2,32),res='',words=[],abl=ascii.length*8,hash=sha256.h=sha256.h||[],k=sha256.k=sha256.k||[],pc=k.length,ic={},i,j;for(var c=2;pc<64;c++)if(!ic[c]){for(i=0;i<313;i+=c)ic[i]=c;hash[pc]=(m(c,.5)*mx)|0;k[pc++]=(m(c,1/3)*mx)|0;}ascii+='\x80';while(ascii.length%64-56)ascii+='\x00';for(i=0;i<ascii.length;i++){j=ascii.charCodeAt(i);if(j>>8)return;words[i>>2]|=j<<((3-i)%4)*8;}words[words.length]=((abl/mx)|0);words[words.length]=(abl);for(j=0;j<words.length;){var w=words.slice(j,j+=16),old=hash;hash=hash.slice(0,8);for(i=0;i<64;i++){var w15=w[i-15],w2=w[i-2],a=hash[0],e=hash[4],t1=hash[7]+(r(6,e)^r(11,e)^r(25,e))+((e&hash[5])^((~e)&hash[6]))+k[i]+(w[i]=(i<16)?w[i]:(w[i-16]+(r(7,w15)^r(18,w15)^(w15>>>3))+w[i-7]+(r(17,w2)^r(19,w2)^(w2>>>10)))|0),t2=(r(2,a)^r(13,a)^r(22,a))+((a&hash[1])^(a&hash[2])^(hash[1]&hash[2]));hash=[(t1+t2)|0].concat(hash);hash[4]=(hash[4]+t1)|0;}for(i=0;i<8;i++)hash[i]=(hash[i]+old[i])|0;}for(i=0;i<8;i++)for(j=3;j+1;j--){var b=(hash[i]>>(j*8))&255;res+=((b<16)?0:'')+b.toString(16);}return res;}
+const pinHash=p=>sha256(unescape(encodeURIComponent('jv-kpi|'+String(p).trim())));
+const adminSet=()=>!!S.settings.adminHash,hiddenTabs=()=>Array.isArray(S.settings.hiddenTabs)?S.settings.hiddenTabs:['stops','map','set'];
+const isAdmin=()=>{if(!adminSet())return true;try{return localStorage.getItem(ADK)===S.settings.adminHash;}catch(e){return false;}};
+const tabAllowed=k=>isAdmin()||!hiddenTabs().includes(k);
+function askPin(msg){return new Promise(res=>{const o=document.createElement('div');o.className='modal';o.innerHTML=`<div class="mbox"><p>${esc(msg)}</p><input type="password" inputmode="numeric" autocomplete="off" style="width:100%"><div class="row"><button class="pri" data-ok>تأكيد</button><button data-no>إلغاء</button></div></div>`;document.body.appendChild(o);const i=o.querySelector('input'),done=v=>{o.remove();res(v);};o.querySelector('[data-ok]').onclick=()=>done(i.value);o.querySelector('[data-no]').onclick=()=>done(null);i.onkeydown=e=>{if(e.key==='Enter')done(i.value);else if(e.key==='Escape')done(null);};i.focus();});}
+function admLabel(){const b=$('#adm');if(!b)return;b.textContent=!adminSet()?'🔓 تقييد التبويبات':isAdmin()?'🔓 وضع المسؤول':'🔒 دخول المسؤول';b.title=!adminSet()?'إخفاء تبويبات محددة عن المستخدمين برقم سري':isAdmin()?'اضغط للخروج من وضع المسؤول':'أدخل الرقم السري لإظهار التبويبات المقيّدة';}
+async function setNewPin(){const p1=await askPin('أنشئ رقمًا سريًا للمسؤول (4 خانات على الأقل). التبويبات المقيّدة ستُخفى عن بقية المستخدمين.');if(p1==null)return false;if(String(p1).trim().length<4){toast('الرقم السري قصير — 4 خانات على الأقل','warn');return false;}
+  const p2=await askPin('أعد إدخال الرقم السري للتأكيد');if(p2!==p1){toast('الرقمان غير متطابقين','warn');return false;}
+  S.settings.adminHash=pinHash(p1);if(!Array.isArray(S.settings.hiddenTabs))S.settings.hiddenTabs=['stops','map','set'];try{localStorage.setItem(ADK,S.settings.adminHash);}catch(e){}save();return true;}
+async function adminClick(){
+  if(!adminSet()){if(await setNewPin()){render();toast('✔ تم تفعيل قفل التبويبات — أنت الآن في وضع المسؤول');}return;}
+  if(isAdmin()){try{localStorage.removeItem(ADK);}catch(e){}if(!tabAllowed(tab))tab='entry';render();toast('تم الخروج من وضع المسؤول');return;}
+  const p=await askPin('أدخل الرقم السري للمسؤول');if(p==null)return;
+  if(pinHash(p)===S.settings.adminHash){try{localStorage.setItem(ADK,S.settings.adminHash);}catch(e){}render();toast('✔ تم الدخول إلى وضع المسؤول');}else toast('الرقم السري غير صحيح','warn');}
+function adminCard(){return `<div class="card"><h3>وضع المسؤول وإخفاء التبويبات</h3><p class="muted">التبويبات المحددة أدناه تظهر لك أنت فقط بعد إدخال الرقم السري، وتُخفى عن بقية المستخدمين. هذا إخفاء من الواجهة وليس حماية أمنية كاملة، فلا تعتمد عليه لحماية بيانات حساسة.</p>
+  <div class="row">${TABS.filter(t=>t[0]!=='entry').map(t=>`<label><input type="checkbox" data-ht="${t[0]}" ${hiddenTabs().includes(t[0])?'checked':''}> ${t[1]}</label>`).join('')}</div>
+  <div class="row"><span class="muted">حالة القفل: ${adminSet()?'<b>مفعّل</b>':'غير مفعّل (كل التبويبات ظاهرة للجميع)'}</span><button id="admpin" type="button">${adminSet()?'تغيير الرقم السري':'تفعيل القفل بالرقم السري'}</button>${adminSet()?'<button id="admoff" type="button" class="del">إلغاء القفل وإظهار كل التبويبات للجميع</button>':''}</div></div>`;}
+function bindAdminCard(){$$('[data-ht]').forEach(c=>c.onchange=()=>{const set=new Set(hiddenTabs());if(c.checked)set.add(c.dataset.ht);else set.delete(c.dataset.ht);S.settings.hiddenTabs=[...set];save();toast('✔ تم حفظ التبويبات المقيّدة');});
+  const pb=$('#admpin');if(pb)pb.onclick=async()=>{if(await setNewPin()){render();toast('✔ تم حفظ الرقم السري');}};
+  const ao=$('#admoff');if(ao)ao.onclick=async()=>{if(!await ask('إلغاء القفل؟ ستظهر كل التبويبات لجميع المستخدمين.','نعم، إلغاء القفل'))return;delete S.settings.adminHash;try{localStorage.removeItem(ADK);}catch(e){}save();render();toast('تم إلغاء القفل');};}
+function initThemeAdmin(){const h=document.querySelector('header');if(!h)return;
+  const t=document.createElement('button');t.id='thm';t.type='button';t.onclick=cycleTheme;h.appendChild(t);
+  const a=document.createElement('button');a.id='adm';a.type='button';a.onclick=adminClick;h.appendChild(a);
+  applyTheme(themeMode());admLabel();}
 /* ---------- Dashboard (top of KPI tab): rings, month trend, department bars ---------- */
 const DB={hide:new Set(),scope:'month'},KP3=[['u','استغلال الطاقة',.85,'#1c6fb5'],['p','الأداء',1,'#7c3aed'],['a','التوافر',1,'#0d9488']];
 const pcs=v=>v==null?'—':(Math.round(v*1000)/10).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
@@ -428,7 +467,7 @@ function bindDash(){const again=()=>{const y=window.scrollY;render();window.scro
 /* ---------- quick command palette (Ctrl/Cmd+K) ---------- */
 function openPalette(){if($('#pal'))return;const sd=()=>S.settings.selDay,vi=()=>R.validDays.indexOf(sd());
   const go=k=>()=>{tab=k;render();};
-  const items=TABS.map(t=>({t:'انتقال إلى: '+t[1],a:go(t[0])})).concat([{t:'حفظ الآن',a:()=>$('#bk').click()},{t:'تصدير تقرير Excel',a:()=>$('#xr').click()},{t:'فتح ملف…',a:()=>$('#file').click()},
+  const items=TABS.filter(t=>tabAllowed(t[0])).map(t=>({t:'انتقال إلى: '+t[1],a:go(t[0])})).concat([{t:'تبديل المظهر (تلقائي / فاتح / داكن)',a:cycleTheme},{t:'حفظ الآن',a:()=>$('#bk').click()},{t:'تصدير تقرير Excel',a:()=>$('#xr').click()},{t:'فتح ملف…',a:()=>$('#file').click()},
     {t:'اليوم السابق (مؤشرات الأداء)',a:()=>{const i=vi();if(i>0){S.settings.selDay=R.validDays[i-1];save();tab='kpi';render();}}},{t:'اليوم التالي (مؤشرات الأداء)',a:()=>{const i=vi();if(i>=0&&i<R.validDays.length-1){S.settings.selDay=R.validDays[i+1];save();tab='kpi';render();}}}]);
   const m=document.createElement('div');m.className='modal pal';m.id='pal';m.innerHTML='<div class="palb"><input id="palq" placeholder="اكتب للبحث عن تبويب أو أمر…  (↑ ↓ Enter — Esc للإغلاق)" autocomplete="off"><div id="pall"></div></div>';document.body.appendChild(m);
   let sel=0,list=items;const draw=()=>{$('#pall').innerHTML=list.map((x,i)=>`<div class="pali ${i===sel?'on':''}" data-i="${i}">${esc(x.t)}</div>`).join('')||'<div class="pali muted">لا يوجد نتائج</div>';$$('.pali[data-i]').forEach(e=>{e.onclick=()=>run(+e.dataset.i);e.onmousemove=()=>{if(sel!==+e.dataset.i){sel=+e.dataset.i;$$('.pali').forEach(z=>z.classList.toggle('on',+z.dataset.i===sel));}};});const on=$('.pali.on');if(on)on.scrollIntoView({block:'nearest'});};
@@ -589,7 +628,7 @@ function bindMap(){drawMapRows();['#ms','#mdf','#mw'].forEach(s=>$(s).oninput=dr
     $('#tr').innerHTML=m?`✔ <b>موجود</b> — ${esc(m.dept||'بدون قسم')} — ${m.inc==='لا'?'خارج حساب المؤشرات (ظاهر في الساعات والتوقف)':'داخل حساب المؤشرات'} — ${info?info.count+' صف في Data':'لا يوجد صفوف في Data'}`:`✖ <b>غير موجود في الخريطة</b>${info?` — وليه ${info.count} صف في Data لن يُحتسبوا`:''}`;};}
 function viewSettings(){
   const st=S.settings;
-  return `<div class="grid2"><div class="card"><h3>استبعاد مركز عمل بتاريخ</h3><p class="muted">"من" و"إلى" فارغين = كل الأيام. "من" فقط = يوم واحد. الاثنين = فترة. البيانات تظل في Data وتُستبعد من حساب المؤشرات فقط (وتظل ظاهرة في ساعات التوقف والإجماليات).</p>
+  return `${adminCard()}<div class="grid2"><div class="card"><h3>استبعاد مركز عمل بتاريخ</h3><p class="muted">"من" و"إلى" فارغين = كل الأيام. "من" فقط = يوم واحد. الاثنين = فترة. البيانات تظل في Data وتُستبعد من حساب المؤشرات فقط (وتظل ظاهرة في ساعات التوقف والإجماليات).</p>
    <datalist id="dl_wc">${S.map.map(m=>`<option value="${esc(m.name)}">`).join('')}</datalist><div class="tw"><table class="kt"><thead><tr><th>Work Center</th><th>من يوم</th><th>إلى يوم</th><th>السبب</th><th>الحالة</th><th></th></tr></thead><tbody>
    ${S.excl.map((e,i)=>{const ok=S.map.some(m=>K.norm(m.name)===K.norm(e.wc));const bad=e.from!=null&&e.to!=null&&e.from>e.to;const s=!ok?'⚠ الاسم غير موجود في الخريطة':bad?'⚠ البداية بعد النهاية':(e.from==null&&e.to==null)?'✔ كل الأيام':e.to==null?'✔ يوم واحد':'✔ فترة';
     return `<tr data-i="${i}"><td><input data-e="wc" list="dl_wc" value="${esc(e.wc)}" class="w"></td><td><input type="date" data-e="from" value="${iso(e.from)}"></td><td><input type="date" data-e="to" value="${iso(e.to)}"></td><td><input data-e="reason" value="${esc(e.reason||'')}"></td><td class="st">${s}</td><td><button class="del" data-edel="${i}">حذف</button></td></tr>`;}).join('')}</tbody></table></div>
@@ -601,7 +640,7 @@ function viewSettings(){
    <hr><h4>قسم الثلاجات (استغلال الطاقة فقط)</h4><label><input type="checkbox" id="fr" ${st.frOn?'checked':''}> تفعيل القاعدة</label>
    <label>الوقت النظري للقطعة (دقيقة) <input type="number" id="theo" min="0.1" step="0.1" value="${st.theo}" style="width:90px"></label>
    <label>كلمة الإنتاج الفعلي (في اسم الصنف) <input id="kw" value="${esc(st.kw)}" style="width:120px"></label></div></div></div>`;}
-function bindSettings(){const st=S.settings;
+function bindSettings(){const st=S.settings;bindAdminCard();
   $('#addex').onclick=()=>{S.excl.push({wc:'',from:null,to:null,reason:''});save();render();};
   $$('[data-e]').forEach(el=>el.onchange=()=>{const i=+el.closest('tr').dataset.i,f=el.dataset.e,e=S.excl[i];if(f==='from'||f==='to')e[f]=isoToSer(el.value);else e[f]=el.value;save();render();});
   $$('[data-edel]').forEach(b=>b.onclick=()=>{S.excl.splice(+b.dataset.edel,1);save();render();toast('✔ تم إلغاء الاستبعاد');});
@@ -682,14 +721,14 @@ function viewGuide(){return `<div class="card guide"><h3>شرح سريع</h3>
  <p><b>الاستخدام اليومي:</b> (1) من تبويب البيانات استورد ملف الإنتاج اليومي (تُقرأ الأوراق تلقائيًا) أو الصق الصفوف. (2) راجع الفحوصات في تبويب المؤشرات. (3) اختر اليوم وانسخ كل مؤشر. تُطابَق الأسماء دون حساسية للمسافات الزائدة أو حالة الحروف.</p>
  <p><b>تسجيل البيانات:</b> تبويب تسجيل البيانات بنفس أعمدة شيت Data. أدخل مركز العمل والصنف (زمن الدورة يُملأ تلقائيًا من الذاكرة) ثم الكمية والساعات، وEnter ينقلك للخانة التي بعدها وبيضيف الصف. "تجهيز اليوم" ينشئ مسودات من اليوم السابق. القائمة الموضحة أدناه تعرض لك الماكينات التي لم تُسجَّل بعد (ستُحتسب متوقفة).</p>
  <p><b>تجميع مركز العمل:</b> تبويب 📊 يجمع لكل مركز عمل الكمية وساعات التشغيل والتوقف لأي فترة (أو لكل يوم / لكل صنف)، وتحته قائمة تحقق (تطابق المجاميع، أسماء غير موجود في الخريطة، ساعات أكثر من 24، تكرار، كمية بدون ساعات، أيام ناقصة...) ومقارنة مع أرقام تلصقها من Excel.</p>
- <p><b>قفل الأصناف:</b> تبويب ✅ يعرض أصناف قسم البناطة (أو أي قسم) يوم بيوم ولكل مركز عمل بكميتها، بدون إجمالي. إنت التي تتحكم في العرض: يوم / فترة / كل الشهر، مركز عمل، حالة، تجميع، وعدد الصفوف. حدّد ☑ على ما أقفلته في النظام، وشريط الأيام يعرض المقفول من كل يوم. إذا سجلت كمية جديدة بعد القفل يظهر الفرق. <b>تقرير Excel:</b> زرار 📥 في الهيدر يتم تنزيل ملف بنفس تنسيق شيتات الحاسبة (المؤشرات، سجل الأيام، التوقف، التجميع بالأقسام) للإرسال.</p>
+ <p><b>التصنيع على النظام:</b> تبويب ✅ يعرض أصناف قسم البناطة (أو أي قسم) يوم بيوم ولكل مركز عمل بكميتها، بدون إجمالي. إنت التي تتحكم في العرض: يوم / فترة / كل الشهر، مركز عمل، حالة، تجميع، وعدد الصفوف. حدّد ☑ على ما صنّعته على النظام، وشريط الأيام يعرض المُصنَّع من كل يوم. إذا سجّلت كمية جديدة بعد التصنيع يظهر الفرق. <b>تقرير Excel:</b> زرار 📥 في الهيدر يتم تنزيل ملف بنفس تنسيق شيتات الحاسبة (المؤشرات، سجل الأيام، التوقف، التجميع بالأقسام) للإرسال.</p>
  <p><b>الحفظ:</b> الزر حفظ الآن: أول مرة تختار ملف (kpi_data.json) وبعدها يُحفظ كل تعديل فيه تلقائيًا. في المتصفحات التي لا تدعم ذلك يتم تنزيل ملف. يُحفظ كل شيء تلقائيًا في المتصفح على هذا الجهاز. للنسخ الاحتياطي أو النقل إلى جهاز آخر: "حفظ نسخة".</p></div>`;}
 
 /* ================= data entry (same columns as the Excel Data sheet) ================= */
 const WEEK=n=>{const d=K.serToDate(n),t=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()));const dn=(t.getUTCDay()+6)%7;t.setUTCDate(t.getUTCDate()-dn+3);const y=new Date(Date.UTC(t.getUTCFullYear(),0,4));return 'W'+(1+Math.round(((t-y)/864e5-3+((y.getUTCDay()+6)%7))/7));};
 let memCache=null,memKey='';
 function mem(){const k=S.data.length+':'+memVer;if(memCache&&memKey===k)return memCache;const wc=new Map(),pr=new Map();
-  for(const r of S.data){if(r.x&&r.x.draft)continue;const w=K.norm(r.wc),p=K.norm(r.prod);if(!w)continue;let a=wc.get(w);if(!a){a={name:r.wc,prods:new Map()};wc.set(w,a);}
+  for(const r of S.data){if(r.x&&r.x.draft)continue;if(isStop(r))continue;const w=K.norm(r.wc),p=K.norm(r.prod);if(!w)continue;let a=wc.get(w);if(!a){a={name:r.wc,prods:new Map()};wc.set(w,a);}
     if(!p)continue;let b=a.prods.get(p);if(!b){b={prod:r.prod,cyc:0,n:0,last:0};a.prods.set(p,b);}b.n++;if(r.day>=b.last){b.last=r.day;if(r.cyc>0)b.cyc=r.cyc;}
     if(r.cyc>0){const g=pr.get(p);if(!g||r.day>=g.last)pr.set(p,{cyc:r.cyc,last:r.day,prod:r.prod,wc:r.wc});}}
   memCache={wc,pr};memKey=k;return memCache;}
@@ -727,7 +766,9 @@ function drawBoard(){const box=$('#bgrid');if(!box)return;const d=entryDay(),all
 function undoToast(msg,fn){const t=document.createElement('div');t.className='toast warn';t.innerHTML=`${esc(msg)} <button type="button" class="mini" style="margin-inline-start:10px">تراجع</button>`;t.querySelector('button').onclick=()=>{fn();t.remove();};const box=$('#toasts');box.appendChild(t);setTimeout(()=>t.remove(),7000);}
 function drawDrawer(){const el=$('#bdrawer');if(!el)return;const d=entryDay(),m=boardData(d).find(x=>x.n===BO.sel);
   if(!m){el.innerHTML='<p class="muted">اختر ماكينة من اللوحة</p>';return;}
-  const a=mem().wc.get(m.n),prods=a?[...a.prods.values()].sort((x,y)=>y.last-x.last||y.n-x.n).slice(0,6):[],rem=Math.max(0,r2(m.shiftH-m.tot)),dr=BO.dr,sh=r2(m.shiftH);
+  const MM=mem(),a=MM.wc.get(m.n),prods=a?[...a.prods.values()].sort((x,y)=>y.last-x.last||y.n-x.n).slice(0,6):[],glob=prods.length?[]:[...MM.pr.values()].sort((x,y)=>y.last-x.last).slice(0,8),cycOf=pn=>{const k=K.norm(pn),p=a&&a.prods.get(k);if(p&&p.cyc)return p.cyc;const g=MM.pr.get(k);return g?g.cyc:0;};
+  if(!BO.dr.prod&&!BO.dr.qty&&!BO.dr.hrs&&prods.length&&!m.real.length){BO.dr.prod=prods[0].prod;BO.dr.cyc=prods[0].cyc||'';}
+  const rem=Math.max(0,r2(m.shiftH-m.tot)),dr=BO.dr,sh=r2(m.shiftH);
   const rowH=r=>{const ix=S.data.indexOf(r),st=isStop(r),dft=r.x&&r.x.draft&&!(+r.qty||+r.hrs);
     return `<div class="brow ${st?'stp':''} ${dft?'dft':''}" data-ix="${ix}"><div class="brh"><b>${st?'توقف':dft?'مسودة — أدخل الكمية والساعات':'تسجيل'}</b><button type="button" class="mini del" data-bdel>حذف</button></div>
      ${st?`<div class="g2"><input data-bk="hrs" type="number" step="any" value="${r.hrs||''}" placeholder="ساعات"><input data-bx="cs" value="${esc((r.x&&r.x.cs)||'')}" placeholder="السبب"></div>`
@@ -735,8 +776,8 @@ function drawDrawer(){const el=$('#bdrawer');if(!el)return;const d=entryDay(),m=
   el.innerHTML=`<div class="drh"><div><b style="font-size:16px">${esc(m.wc)}</b><div class="muted">${esc(m.dept)} — ${iso(d)}</div></div><span class="pl2 ${m.status}">${m.status==='part'?'ناقص '+rem+' س':STT[m.status]}</span></div>
    <div class="trk-sum" style="margin:8px 0 12px;grid-template-columns:repeat(3,1fr)"><div class="tile"><b>${r2(m.qty)}</b><span>كمية</span></div><div class="tile"><b>${r2(m.run)}</b><span>ساعات التشغيل</span></div><div class="tile"><b>${r2(m.stop)}</b><span>ساعات توقف</span></div></div>
    <h4 style="margin-top:4px">المسجَّل اليوم <span class="muted">(قابل للتعديل مباشرة)</span></h4>${m.rows.length?m.rows.map(rowH).join(''):'<p class="muted" style="margin:0 0 8px">لا يوجد تسجيل لهذه الماكينة في هذا اليوم حتى الآن</p>'}
-   <h4>إضافة تسجيل</h4>${prods.length?`<div class="chips">${prods.map(p=>`<button type="button" class="chip pc" data-bp="${esc(p.prod)}">${esc(p.prod)}</button>`).join('')}</div>`:''}
-   <input id="bd_prod" list="bd_pl" placeholder="الصنف" value="${esc(dr.prod)}" autocomplete="off"><datalist id="bd_pl">${prods.map(p=>`<option value="${esc(p.prod)}">`).join('')}</datalist>
+   <h4>إضافة تسجيل</h4>${prods.length?`<div class="muted" style="font-size:12px">أصناف سبق تسجيلها على هذه الماكينة (مع زمن الدورة)</div><div class="chips">${prods.map(p=>`<button type="button" class="chip pc ${K.norm(dr.prod)===K.norm(p.prod)?'on':''}" data-bp="${esc(p.prod)}">${esc(p.prod)}${p.cyc?' · '+p.cyc+' ث':''}</button>`).join('')}</div>`:glob.length?`<div class="muted" style="font-size:12px">لا توجد أصناف سابقة على هذه الماكينة — أحدث الأصناف من ماكينات أخرى (راجع زمن الدورة)</div><div class="chips">${glob.map(p=>`<button type="button" class="chip pc" data-bp="${esc(p.prod)}">${esc(p.prod)}${p.cyc?' · '+p.cyc+' ث':''}</button>`).join('')}</div>`:''}
+   <input id="bd_prod" list="bd_pl" placeholder="الصنف" value="${esc(dr.prod)}" autocomplete="off"><datalist id="bd_pl">${prods.map(p=>`<option value="${esc(p.prod)}">${p.cyc?p.cyc+' ث':''}</option>`).join('')}${[...MM.pr.values()].filter(p=>!(a&&a.prods.has(K.norm(p.prod)))).sort((x,y)=>y.last-x.last).slice(0,150).map(p=>`<option value="${esc(p.prod)}">${p.cyc?p.cyc+' ث — '+esc(p.wc):''}</option>`).join('')}</datalist>
    <div class="g2" style="margin-top:6px"><input id="bd_qty" type="number" step="any" placeholder="الكمية المنتجة" value="${dr.qty}"><input id="bd_cyc" type="number" step="any" placeholder="زمن القطعة (ث)" value="${dr.cyc}"></div>
    <div class="chips" style="margin:6px 0 4px">${[sh,6,4,2].filter((v,i,a)=>v>0&&a.indexOf(v)===i).map(v=>`<button type="button" class="chip pc" data-bh="${v}">${v} س</button>`).join('')}${rem>0&&rem!==sh?`<button type="button" class="chip pc" data-bh="${rem}">باقي الوردية ${rem} س</button>`:''}</div>
    <input id="bd_hrs" type="number" step="any" placeholder="ساعات التشغيل" value="${dr.hrs}">
@@ -745,10 +786,10 @@ function drawDrawer(){const el=$('#bdrawer');if(!el)return;const d=entryDay(),m=
    <div class="g2" style="margin-top:6px"><input id="bd_cs" value="${esc(dr.cs)}" placeholder="السبب"><input id="bd_sh" type="number" step="any" value="${rem||sh}" placeholder="ساعات التوقف"></div>
    <button type="button" id="bd_stop" style="margin-top:8px;width:100%">سجّل توقف</button>`;
   const redraw=()=>{drawEntrySummary();drawEntryRows();};
-  $$('#bdrawer [data-bp]').forEach(b=>b.onclick=()=>{const p=a&&a.prods.get(K.norm(b.dataset.bp));BO.dr.prod=b.dataset.bp;if(p&&p.cyc)BO.dr.cyc=p.cyc;drawDrawer();$('#bd_qty').focus();});
+  $$('#bdrawer [data-bp]').forEach(b=>b.onclick=()=>{BO.dr.prod=b.dataset.bp;const c=cycOf(b.dataset.bp);if(c)BO.dr.cyc=c;drawDrawer();$('#bd_qty').focus();});
   $$('#bdrawer [data-bh]').forEach(b=>b.onclick=()=>{BO.dr.hrs=b.dataset.bh;$('#bd_hrs').value=b.dataset.bh;});
   $$('#bdrawer [data-br]').forEach(b=>b.onclick=()=>{BO.dr.cs=b.dataset.br;$$('#bdrawer [data-br]').forEach(x=>x.classList.toggle('on',x===b));$('#bd_cs').value=b.dataset.br;});
-  $('#bd_prod').oninput=e=>{BO.dr.prod=e.target.value;const p=a&&a.prods.get(K.norm(e.target.value));if(p&&p.cyc&&!BO.dr.cyc){BO.dr.cyc=p.cyc;$('#bd_cyc').value=p.cyc;}};
+  $('#bd_prod').oninput=e=>{BO.dr.prod=e.target.value;const c=cycOf(e.target.value);if(c&&!BO.dr.cyc){BO.dr.cyc=c;$('#bd_cyc').value=c;}};$('#bd_prod').onchange=e=>{const c=cycOf(e.target.value);if(c){BO.dr.cyc=c;$('#bd_cyc').value=c;}};
   $('#bd_qty').oninput=e=>BO.dr.qty=e.target.value;$('#bd_cyc').oninput=e=>BO.dr.cyc=e.target.value;$('#bd_hrs').oninput=e=>BO.dr.hrs=e.target.value;$('#bd_cs').oninput=e=>BO.dr.cs=e.target.value;
   $('#bd_qty').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#bd_hrs').focus();}};$('#bd_hrs').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#bd_next').click();}};
   const save1=(go)=>{const x=BO.dr;if(String(x.qty)===''&&String(x.hrs)==='')return toast('أدخل الكمية أو اختر ساعات التشغيل','warn');
@@ -820,15 +861,20 @@ function viewEntry(){const d=entryDay();
    <div><label>Model Working Time (ساعات)</label><input id="fhr" type="number" step="any" min="0"></div>
    <div class="fb"><button class="pri" id="fadd">إضافة (Enter)</button></div></div>
   <datalist id="dl_ewc">${S.map.map(m=>`<option value="${esc(m.name)}">`).join('')}</datalist><datalist id="dl_epr"></datalist>
-  <div id="fhint" class="muted"></div><div id="fdept" class="row" style="display:none"><span class="muted">⚠ مركز العمل هذا غير موجود في الخريطة — اختر قسمه وسيُضاف تلقائيًا:</span>${deptSel('','id="fdsel"')}</div>
+  <div id="fhint" class="muted"></div><div id="fchips" class="chips"></div><div id="fdept" class="row" style="display:none"><span class="muted">⚠ مركز العمل هذا غير موجود في الخريطة — اختر قسمه وسيُضاف تلقائيًا:</span>${deptSel('','id="fdsel"')}</div>
   <div class="row"><button id="fmore">حقول إضافية (setup / changeover / breakdown / الأسباب)</button><span id="fxs" style="display:none;gap:8px;flex-wrap:wrap" class="row">${XF.map(([k,l,t])=>`<input data-x="${k}" type="${t}" placeholder="${l}" style="width:${t==='text'?170:120}px">`).join('')}</span></div>
   <div class="bar"><button id="fstop">تسجيل توقف (مركز عمل + سبب)</button><button id="fdup">تكرار آخر صف</button><button id="fprep">تجهيز اليوم من يوم سابق</button><button id="fclr" class="del">حذف المسودات الفارغة</button></div></div>
   
   </details>`;}
 function drawEntrySummary(){const d=entryDay(),rows=dayRows(d).filter(r=>!(r.x&&r.x.draft)),wcs=new Set(rows.map(r=>K.norm(r.wc)));
   $('#esum').textContent=`${rows.length} صف · ${wcs.size} مركز عمل مسجل`;drawBoard();drawDrawer();}
-function drawProducts(){const w=K.norm($('#fwc').value),a=mem().wc.get(w);const dl=$('#dl_epr');
-  dl.innerHTML=a?[...a.prods.values()].sort((x,y)=>y.last-x.last||y.n-x.n).map(p=>`<option value="${esc(p.prod)}">${p.cyc?p.cyc+' ث':''}</option>`).join(''):'';}
+function drawProducts(){const M_=mem(),w=K.norm($('#fwc').value),a=M_.wc.get(w);const dl=$('#dl_epr');
+  const own=a?[...a.prods.values()].sort((x,y)=>y.last-x.last||y.n-x.n):[],glob=[...M_.pr.values()].sort((x,y)=>y.last-x.last);
+  const seen=new Set(own.map(p=>K.norm(p.prod)));
+  dl.innerHTML=own.map(p=>`<option value="${esc(p.prod)}">${p.cyc?p.cyc+' ث':''}</option>`).join('')+glob.filter(p=>!seen.has(K.norm(p.prod))).slice(0,150).map(p=>`<option value="${esc(p.prod)}">${p.cyc?p.cyc+' ث — '+esc(p.wc):''}</option>`).join('');
+  const box=$('#fchips');if(!box)return;const items=(own.length?own:glob).slice(0,8);
+  box.innerHTML=w&&items.length?`<span class="muted">${own.length?'أصناف سبق تسجيلها على هذه الماكينة (اضغط للاختيار وسيُملأ زمن الدورة):':'لا توجد أصناف سابقة على هذه الماكينة — أحدث الأصناف من ماكينات أخرى (راجع زمن الدورة):'}</span>`+items.map(p=>`<button type="button" class="chip pc" data-fp="${esc(p.prod)}">${esc(p.prod)}${p.cyc?' · '+p.cyc+' ث':''}</button>`).join(''):'';
+  $$('#fchips [data-fp]').forEach(b=>b.onclick=()=>{$('#fpr').value=b.dataset.fp;onProd();$('#fqt').focus();});}
 function onWc(){drawProducts();const w=K.norm($('#fwc').value);const known=S.map.some(m=>K.norm(m.name)===w);$('#fdept').style.display=(w&&!known)?'flex':'none';const a=mem().wc.get(w);
   $('#fhint').textContent=a?`ذاكرة: ${a.prods.size} صنف سبق تسجيله على هذه الماكينة — اختر الصنف وسيُملأ زمن الدورة تلقائيًا`:'';}
 function onProd(){const w=K.norm($('#fwc').value),p=K.norm($('#fpr').value);if(!p)return;const m=mem();const a=m.wc.get(w);const b=a&&a.prods.get(p);let src='';
@@ -865,7 +911,7 @@ function bindEntry(){const set=()=>{drawProducts();drawEntrySummary();drawEntryR
   const go=d=>{EN.day=d;S.settings.lastEntryDay=d;save();$('#eday').value=iso(d);set();};
   $('#eday').onchange=e=>{const v=isoToSer(e.target.value);if(v)go(v);};$('#dprev').onclick=()=>go(entryDay()-1);$('#dnext').onclick=()=>go(entryDay()+1);
   $('#dlast').onclick=()=>{const ds=S.data.map(r=>r.day);if(ds.length)go(Math.max(...ds));};
-  $('#fwc').oninput=onWc;$('#fwc').onchange=()=>{onWc();};$('#fpr').onchange=onProd;
+  $('#fwc').oninput=onWc;$('#fwc').onchange=()=>{onWc();};$('#fpr').onchange=onProd;$('#fpr').onfocus=()=>{if(!$('#fpr').value&&$('#dl_epr').options.length){try{$('#fpr').showPicker&&$('#fpr').showPicker();}catch(e){}}};
   $('#fpr').oninput=()=>{const p=K.norm($('#fpr').value);if(mem().wc.get(K.norm($('#fwc').value))&&mem().wc.get(K.norm($('#fwc').value)).prods.has(p))onProd();};
   ['fwc','fpr','fcy','fqt','fhr'].forEach(id=>$('#'+id).addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();if(id==='fpr')onProd();if(id==='fhr'||!focusNext(id))addFromForm();}));
   $('#fadd').onclick=addFromForm;$('#fmore').onclick=()=>{const s=$('#fxs');s.style.display=s.style.display==='none'?'flex':'none';};
@@ -1110,15 +1156,15 @@ function closeItems(){const {f,t}=clRange();
   const mk=String(f);S.closedD=S.closedD||{};const ent=S.closedD[mk]||[];
   return [...m.values()].map(it=>{const e=ent.find(x=>x.day===it.day&&x.wn===it.wn&&x.keys.some(k=>it.keys.has(k)));const cq=e?(+e.q||0):0,tot=e&&e.tot!=null?+e.tot:cq,rem=it.qty-cq;it.ent=e;it.cq=cq;it.rem=Math.max(0,rem);it.held=cq>0?Math.max(0,tot-cq):0;it.newq=cq>0?Math.max(0,it.qty-tot):0;it.reason=(e&&e.reason)||'';it.status=cq<=0.0001?'open':rem>0.0001?'partial':'done';return it;})
     .sort((a,b)=>a.day-b.day||a.wc.localeCompare(b.wc)||a.name.localeCompare(b.name));}
-function viewClose(){return `<div class="card hotc"><h3 style="margin-top:0">إقفال الأصناف — يومًا بيوم لكل مركز عمل</h3>
+function viewClose(){return `<div class="card hotc"><h3 style="margin-top:0">التصنيع على النظام — يوميًا لكل مركز عمل</h3>
   <div class="row"><label>الشهر</label><select id="cmon"></select><label>القسم</label><select id="cdp">${DEPTS_ALL.map(d=>`<option ${d===CL.dept?'selected':''}>${esc(d)}</option>`).join('')}</select><label>مركز العمل</label><select id="cwc"></select>
    <label>الفترة</label><select id="cmode"><option value="day">يوم واحد</option><option value="range">من يوم لـ يوم</option><option value="all">كل الشهر</option></select>
    <span id="cdayc" class="row" style="margin:0"><button id="cprev">◀</button><select id="cday"></select><button id="cnext">▶</button></span><span id="crng" class="row" style="margin:0"><input type="date" id="cfrom"><input type="date" id="cto"></span></div>
-  <div class="row"><label>الحالة</label><select id="cst"><option value="">الكل</option><option value="todo">التي لم يُقفل (جديد + كمية جديدة)</option><option value="open">لم يُقفل</option><option value="partial">مقفول جزئيًا / توجد كمية جديدة</option><option value="done">تم إقفاله</option></select>
+  <div class="row"><label>الحالة</label><select id="cst"><option value="">الكل</option><option value="todo">التي لم تُصنَّع (جديد + كمية جديدة)</option><option value="open">لم يُصنَّع</option><option value="partial">مُصنَّع جزئيًا / توجد كمية جديدة</option><option value="done">تم تصنيعه</option></select>
    <label>التجميع</label><select id="cgr"><option value="day">حسب اليوم</option><option value="wc">حسب مركز العمل</option><option value="flat">قائمة واحدة</option><option value="prod">حسب الصنف (يدخل على كام مركز عمل)</option></select><label>عدد الصفوف</label><select id="clim"><option>20</option><option>40</option><option>100</option><option value="9999">الكل</option></select>
    <input id="cq" placeholder="🔍 بحث بالصنف" style="width:170px"><label>تشابه الأسماء</label><select id="csim">${SIMOPT(simThr())}</select><label><input type="checkbox" id="cbar"> شريط الأيام</label></div>
   <div id="cdays" class="dbar"></div><div id="csum" class="hs ok"></div>
-  <div class="bar"><button id="ccp">نسخ البنود غير المُقفلة (اليوم / مركز العمل / الصنف / الكمية)</button><button id="call">تحديد المعروض كمُقفل</button><button id="cun">إلغاء تحديد المعروض</button><button id="cfold">طيّ الكل</button><button id="cunfold">فتح الكل</button></div>
+  <div class="bar"><button id="ccp">نسخ البنود غير المُصنَّعة (اليوم / مركز العمل / الصنف / الكمية)</button><button id="call">تصنيع البنود المعروضة</button><button id="cun">إلغاء تحديد المعروض</button><button id="cfold">طيّ الكل</button><button id="cunfold">فتح الكل</button></div>
   <div id="clist"></div></div>`;}
 function drawClose(){fillCloseMonths();const all=closeItems();CL.all=all;const days=[...new Set(all.map(i=>i.day))].sort((a,b)=>a-b);
   if(CL.day==null||!days.includes(CL.day))CL.day=days.length?days[days.length-1]:null;
@@ -1132,7 +1178,7 @@ function drawClose(){fillCloseMonths();const all=closeItems();CL.all=all;const d
   const stOk=i=>!CL.status||(CL.status==='todo'?i.status!=='done':i.status===CL.status);
   const shown=all.filter(i=>inPeriod(i)&&pass(i)&&stOk(i));CL.shown=shown;const inScope=all.filter(i=>inPeriod(i)&&pass(i));
   const cnt=s=>inScope.filter(i=>i.status===s).length;
-  $('#csum').innerHTML=`المعروض: ${inScope.length} بند — ✔ تم إقفاله ${cnt('done')} — ⚠ مقفول جزئيًا / كمية جديدة ${cnt('partial')} — بعد ${cnt('open')}${CL.status?` — <span class="muted">(الجدول تحت يعرض ${shown.length} حسب فلتر الحالة)</span>`:''}`;
+  $('#csum').innerHTML=`المعروض: ${inScope.length} بند — ✔ تم تصنيعه ${cnt('done')} — ⚠ مُصنَّع جزئيًا / كمية جديدة ${cnt('partial')} — بعد ${cnt('open')}${CL.status?` — <span class="muted">(الجدول تحت يعرض ${shown.length} حسب فلتر الحالة)</span>`:''}`;
   $('#cdays').style.display=CL.bar?'flex':'none';
   $('#cdays').innerHTML=days.map(d=>{const it=all.filter(i=>i.day===d&&(!CL.wc||i.wc===CL.wc)),dn=it.filter(i=>i.status==='done').length,c=dn===it.length?'done':dn?'part':'none';return `<button class="dchip ${c} ${d===CL.day&&CL.mode==='day'?'sel':''}" data-d="${d}">${iso(d).slice(5)} <b>${dn}/${it.length}</b></button>`;}).join('')||'<span class="muted">لا يوجد أيام</span>';
   $$('#cdays [data-d]').forEach(b=>b.onclick=()=>{CL.mode='day';CL.day=+b.dataset.d;$('#cmode').value='day';drawClose();});
@@ -1141,12 +1187,12 @@ function drawClose(){fillCloseMonths();const all=closeItems();CL.all=all;const d
   const groups=new Map();let n=0,more=0;for(const i of (CL.group==='prod'?shown.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar')||a.day-b.day||a.wc.localeCompare(b.wc)):shown)){const k=key(i);if(!groups.has(k))groups.set(k,{label:lab(i),all:[],show:[]});const g=groups.get(k);g.all.push(i);if(n<CL.limit){g.show.push(i);n++;}else more++;}
   const gl=[...groups.entries()],gcols=CL.group==='flat'?0:1;let h='';
   gl.forEach(([k,g],gi)=>{const done=g.all.filter(i=>i.status==='done').length,key2=CL.group+'|'+k,open=CL.opened.has(key2)?CL.opened.get(key2):(CL.group==='flat'||gl.length===1);
-    const body=g.show.length?`<div class="tw"><table class="kt"><thead><tr><th>تم إقفاله</th>${CL.group!=='day'?'<th>التاريخ</th>':''}${CL.group!=='wc'?'<th>مركز العمل</th>':''}<th>الصنف</th><th>الكمية</th><th>المقفول</th><th>المتبقي</th><th>الحالة</th><th>السبب / ملاحظة</th><th></th></tr></thead><tbody>${g.show.map(i=>`<tr class="${i.status==='done'?'dn2':i.status==='partial'?'bd':''}"><td><input type="checkbox" data-i="${CL.all.indexOf(i)}" ${i.status==='done'?'checked':''}></td>${CL.group!=='day'?`<td>${iso(i.day)}</td>`:''}${CL.group!=='wc'?`<td class="dn">${esc(i.wc)}</td>`:''}
-      <td class="dn">${esc(i.name)}${i.variants.size>1?` <span class="muted" title="${esc([...i.variants].join(' | '))}">(+${i.variants.size-1})</span>`:''}</td><td><b>${r2(i.qty)}</b></td><td>${i.ent?r2(i.ent.q):0}</td><td>${r2(i.rem)}</td><td>${i.status==='done'?'✔ تم إقفاله':i.status==='partial'?`⚠ مقفول جزئيًا ${r2(i.cq)} من ${r2(i.qty)}${i.newq>0.0001?` <span class="muted">(منها كمية جديدة ${r2(i.newq)})</span>`:''}`:'غير مُقفل'}</td><td class="rsn" title="${esc(i.reason)}">${i.reason?esc(i.reason):'<span class="muted">—</span>'}</td><td><button class="mini" data-ed="${CL.all.indexOf(i)}">إقفال بكمية…</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">(لم يتم عرض بقية الصفوف — زد عدد الصفوف)</p>';
+    const body=g.show.length?`<div class="tw"><table class="kt"><thead><tr><th>تم تصنيعه</th>${CL.group!=='day'?'<th>التاريخ</th>':''}${CL.group!=='wc'?'<th>مركز العمل</th>':''}<th>الصنف</th><th>الكمية</th><th>المُصنَّع</th><th>المتبقي</th><th>الحالة</th><th>السبب / ملاحظة</th><th></th></tr></thead><tbody>${g.show.map(i=>`<tr class="${i.status==='done'?'dn2':i.status==='partial'?'bd':''}"><td><input type="checkbox" data-i="${CL.all.indexOf(i)}" ${i.status==='done'?'checked':''}></td>${CL.group!=='day'?`<td>${iso(i.day)}</td>`:''}${CL.group!=='wc'?`<td class="dn">${esc(i.wc)}</td>`:''}
+      <td class="dn">${esc(i.name)}${i.variants.size>1?` <span class="muted" title="${esc([...i.variants].join(' | '))}">(+${i.variants.size-1})</span>`:''}</td><td><b>${r2(i.qty)}</b></td><td>${i.ent?r2(i.ent.q):0}</td><td>${r2(i.rem)}</td><td>${i.status==='done'?'✔ تم تصنيعه':i.status==='partial'?`⚠ مُصنَّع جزئيًا ${r2(i.cq)} من ${r2(i.qty)}${i.newq>0.0001?` <span class="muted">(منها كمية جديدة ${r2(i.newq)})</span>`:''}`:'لم يُصنَّع بعد'}</td><td class="rsn" title="${esc(i.reason)}">${i.reason?esc(i.reason):'<span class="muted">—</span>'}</td><td><button class="mini" data-ed="${CL.all.indexOf(i)}">تصنيع بكمية…</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">(لم يتم عرض بقية الصفوف — زد عدد الصفوف)</p>';
     h+=CL.group==='flat'?body:`<details class="chk ${done===g.all.length?'ok':'info'}" data-gk="${esc(key2)}" ${open?'open':''}><summary><b>${esc(g.label)}</b>${CL.group==='prod'?` — يدخل على <b>${(pwc.get(k)||new Map()).size}</b> مركز عمل`:''} — ${g.all.length} بند — ✔ ${done}/${g.all.length} <button class="mini" data-gm="${gi}">تحديد المجموعة</button></summary>${CL.group==='prod'?`<p class="muted">مراكز العمل: ${[...(pwc.get(k)||new Map()).values()].sort().map(esc).join(' ، ')}</p>`:''}${body}</details>`;});
   $('#clist').innerHTML=(h||'<p class="muted">لا توجد بنود وفق الفلاتر المحددة</p>')+(more?`<div class="row"><span class="muted">عُرضت ${n} من ${shown.length}</span><button id="cmore" class="pri">عرض ${Math.min(CL.limit,more)} أيضًا</button></div>`:'');
   CL.groups=gl.map(([k,g])=>g.all);
-  $$('#clist [data-i]').forEach(cb=>{const it=CL.all[+cb.dataset.i];if(it.status==='partial')cb.indeterminate=true;cb.onchange=()=>{setClosed([it],cb.checked);drawClose();toast(cb.checked?`✔ تم إقفاله: ${iso(it.day)} — ${it.wc} — ${it.name} (${r2(it.qty)})`:`تمت إزالة العلامة: ${it.name}`);};});
+  $$('#clist [data-i]').forEach(cb=>{const it=CL.all[+cb.dataset.i];if(it.status==='partial')cb.indeterminate=true;cb.onchange=()=>{setClosed([it],cb.checked);drawClose();toast(cb.checked?`✔ تم تصنيعه: ${iso(it.day)} — ${it.wc} — ${it.name} (${r2(it.qty)})`:`تمت إزالة العلامة: ${it.name}`);};});
   $$('#clist [data-ed]').forEach(b=>b.onclick=()=>openCloseDlg(CL.all[+b.dataset.ed]));
   $$('#clist [data-gm]').forEach(b=>b.onclick=e=>{e.preventDefault();setClosed(CL.groups[+b.dataset.gm],true);drawClose();toast('✔ تم تحديد المجموعة');});
   $$('#clist details[data-gk]').forEach(d=>d.ontoggle=()=>CL.opened.set(d.dataset.gk,d.open));
@@ -1159,12 +1205,12 @@ function setClosedQ(it,q,reason){const mk=clRange().key;S.closedD=S.closedD||{};
   if(q<=0&&!r){if(i>=0)ent.splice(i,1);}else{const o={day:it.day,wn:it.wn,wc:it.wc,keys:i>=0?[...new Set(ent[i].keys.concat([...it.keys]))]:[...it.keys],q:q,tot:it.qty,name:it.name,at:Date.now(),reason:full?'':r};if(i>=0)ent[i]=o;else ent.push(o);}save();}
 function openCloseDlg(it){if(!it||$('#cdlg'))return;const tot=it.qty,cur=it.cq>0?it.cq:0,REAS=['قيد التصنيع / لم يكتمل','في انتظار فحص الجودة','مرفوض / عيوب','لم يُسلَّم للمخزن','نقص خامات','أخرى'];
   const m=document.createElement('div');m.className='modal';m.id='cdlg';
-  m.innerHTML=`<div class="mbox cdlg"><h3>إقفال صنف</h3><p><b>${esc(it.name)}</b><br><span class="muted">${iso(it.day)} — ${esc(it.wc)}</span></p>
-   <div class="trk-sum" style="margin:0 0 14px"><div class="tile"><b>${r2(tot)}</b><span>الكمية المُنتجة</span></div><div class="tile"><b>${r2(cur)}</b><span>مقفول حاليًا</span></div><div class="tile"><b id="cdrem">${r2(tot-cur)}</b><span>سيتبقى بعد الحفظ</span></div></div>
+  m.innerHTML=`<div class="mbox cdlg"><h3>تصنيع صنف على النظام</h3><p><b>${esc(it.name)}</b><br><span class="muted">${iso(it.day)} — ${esc(it.wc)}</span></p>
+   <div class="trk-sum" style="margin:0 0 14px"><div class="tile"><b>${r2(tot)}</b><span>الكمية المُنتجة</span></div><div class="tile"><b>${r2(cur)}</b><span>مُصنَّع حاليًا</span></div><div class="tile"><b id="cdrem">${r2(tot-cur)}</b><span>سيتبقى بعد الحفظ</span></div></div>
    <div class="seg"><label class="opt"><input type="radio" name="cdm" value="full"> الكمية كاملة (${r2(tot)})</label><label class="opt"><input type="radio" name="cdm" value="part"> كمية محددة</label></div>
-   <div class="row"><label>الكمية المقفولة (الإجمالي)</label><input type="number" id="cdq" min="0" max="${tot}" step="any" style="width:130px"><button id="cdh" type="button">نصف</button><button id="cdz" type="button">صفر</button></div>
-   <div id="cdrw"><label class="muted">سبب عدم إقفال المتبقي <b id="cdrl"></b></label><textarea id="cdr" rows="2" placeholder="مثال: بانتظار فحص الجودة / لا يزال تحت التصنيع..."></textarea><div id="cdch" class="vchips">${REAS.map(x=>`<span class="chip pc" data-rs="${esc(x)}">${esc(x)}</span>`).join('')}</div></div>
-   <div class="row" style="margin:6px 0 0"><button class="pri" id="cdok" type="button">حفظ</button><button id="cdcn" type="button">إلغاء</button>${it.ent?'<button class="del" id="cdde" type="button" style="margin-inline-start:auto">إلغاء الإقفال</button>':''}</div></div>`;
+   <div class="row"><label>الكمية المُصنَّعة على النظام (الإجمالي)</label><input type="number" id="cdq" min="0" max="${tot}" step="any" style="width:130px"><button id="cdh" type="button">نصف</button><button id="cdz" type="button">صفر</button></div>
+   <div id="cdrw"><label class="muted">سبب عدم تصنيع المتبقي <b id="cdrl"></b></label><textarea id="cdr" rows="2" placeholder="مثال: بانتظار فحص الجودة / لا يزال تحت التصنيع..."></textarea><div id="cdch" class="vchips">${REAS.map(x=>`<span class="chip pc" data-rs="${esc(x)}">${esc(x)}</span>`).join('')}</div></div>
+   <div class="row" style="margin:6px 0 0"><button class="pri" id="cdok" type="button">حفظ</button><button id="cdcn" type="button">إلغاء</button>${it.ent?'<button class="del" id="cdde" type="button" style="margin-inline-start:auto">إلغاء التصنيع</button>':''}</div></div>`;
   document.body.appendChild(m);
   const q=$('#cdq',m),rad=[...m.querySelectorAll('[name=cdm]')],r=$('#cdr',m),close=()=>m.remove();
   const getQ=()=>{let v=parseFloat(q.value);if(isNaN(v)||v<0)v=0;return Math.min(v,tot);};
@@ -1172,8 +1218,8 @@ function openCloseDlg(it){if(!it||$('#cdlg'))return;const tot=it.qty,cur=it.cq>0
   const full0=cur<=0||cur>=tot-1e-9;rad[0].checked=full0;rad[1].checked=!full0;q.value=full0?tot:cur;r.value=it.reason||'';sync();
   rad.forEach(x=>x.onchange=sync);q.oninput=sync;$('#cdh',m).onclick=()=>{rad[1].checked=true;q.value=Math.round(tot/2*100)/100;sync();};$('#cdz',m).onclick=()=>{rad[1].checked=true;q.value=0;sync();};
   $$('[data-rs]',m).forEach(c=>c.onclick=()=>{r.value=r.value.trim()?r.value.trim()+' — '+c.dataset.rs:c.dataset.rs;r.focus();});
-  const save_=()=>{const v=rad[0].checked?tot:getQ();setClosedQ(it,v,r.value);close();drawClose();toast(v>=tot-1e-9?`✔ تم إقفال ${it.name} بالكامل (${r2(tot)})`:v>0?`✔ تم إقفال ${r2(v)} من ${r2(tot)} — ${it.name}`:`تم حفظ الملاحظة — ${it.name}`);};
-  $('#cdok',m).onclick=save_;$('#cdcn',m).onclick=close;const de=$('#cdde',m);if(de)de.onclick=()=>{setClosed([it],false);close();drawClose();toast('تم إلغاء الإقفال');};
+  const save_=()=>{const v=rad[0].checked?tot:getQ();setClosedQ(it,v,r.value);close();drawClose();toast(v>=tot-1e-9?`✔ تم تصنيع ${it.name} بالكامل (${r2(tot)})`:v>0?`✔ تم تصنيع ${r2(v)} من ${r2(tot)} — ${it.name}`:`تم حفظ الملاحظة — ${it.name}`);};
+  $('#cdok',m).onclick=save_;$('#cdcn',m).onclick=close;const de=$('#cdde',m);if(de)de.onclick=()=>{setClosed([it],false);close();drawClose();toast('تم إلغاء التصنيع');};
   m.onclick=e=>{if(e.target===m)close();};m.onkeydown=e=>{if(e.key==='Escape')close();else if(e.key==='Enter'&&e.target.tagName!=='TEXTAREA'){e.preventDefault();save_();}};
   (q.disabled?$('#cdok',m):q).focus();}
 function bindClose(){const g=id=>$(id),re=()=>{window.scrollTo(window.scrollX,window.scrollY);drawClose();};
@@ -1182,8 +1228,8 @@ function bindClose(){const g=id=>$(id),re=()=>{window.scrollTo(window.scrollX,wi
   g('#cfrom').value=CL.from?iso(CL.from):'';g('#cto').value=CL.to?iso(CL.to):'';g('#cfrom').onchange=e=>{CL.from=isoToSer(e.target.value);re();};g('#cto').onchange=e=>{CL.to=isoToSer(e.target.value);re();};
   g('#cst').value=CL.status;g('#cst').onchange=e=>{CL.status=e.target.value;re();};g('#cgr').value=CL.group;g('#cgr').onchange=e=>{CL.group=e.target.value;re();};g('#clim').value=String(CL.limit);g('#clim').onchange=e=>{CL.limit=+e.target.value;re();};
   g('#cq').value=CL.q;g('#cq').oninput=e=>{CL.q=e.target.value;re();};g('#csim').onchange=e=>{S.settings.simThr=+e.target.value;save();re();};g('#cbar').checked=CL.bar;g('#cbar').onchange=e=>{CL.bar=e.target.checked;re();};
-  g('#ccp').onclick=()=>copy(CL.shown.filter(i=>i.status!=='done').map(i=>[iso(i.day),i.wc,i.name,r2(i.rem),i.reason].join('\t')).join('\n'),'التي لم يُقفل');
-  g('#call').onclick=()=>{if(!CL.shown.length)return;setClosed(CL.shown,true);drawClose();toast(`✔ تم تحديد ${CL.shown.length} بند تم إقفاله`);};g('#cun').onclick=()=>{if(!CL.shown.length)return;setClosed(CL.shown,false);drawClose();toast(`تمت إزالة العلامة من ${CL.shown.length} بند`);};
+  g('#ccp').onclick=()=>copy(CL.shown.filter(i=>i.status!=='done').map(i=>[iso(i.day),i.wc,i.name,r2(i.rem),i.reason].join('\t')).join('\n'),'التي لم تُصنَّع');
+  g('#call').onclick=()=>{if(!CL.shown.length)return;setClosed(CL.shown,true);drawClose();toast(`✔ تم تحديد ${CL.shown.length} بند تم تصنيعه`);};g('#cun').onclick=()=>{if(!CL.shown.length)return;setClosed(CL.shown,false);drawClose();toast(`تمت إزالة العلامة من ${CL.shown.length} بند`);};
   g('#cfold').onclick=()=>{$$('#clist details[data-gk]').forEach(d=>{d.open=false;CL.opened.set(d.dataset.gk,false);});};g('#cunfold').onclick=()=>{$$('#clist details[data-gk]').forEach(d=>{d.open=true;CL.opened.set(d.dataset.gk,true);});};drawClose();}
 /* ---------- Excel report with formatting (own xlsx writer: styles, merges, RTL) ---------- */
 const CRCT=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?(c>>>1)^0xEDB88320:c>>>1;t[n]=c>>>0;}return t;})();
@@ -1281,7 +1327,7 @@ async function cloudInit(){const db=await claude.use('db');if(!db){CLOUD.status=
   const err=e=>{if(e&&e.code==='revoked'){CLOUD.canWrite=false;toast('🔒 سُحبت صلاحية الوصول','warn');}else{CLOUD.status='err';pill();}};
   db.collection('rows').onSnapshot(onRows,err);db.doc('cfg/main').onSnapshot(onCfg,err);db.doc('cfg/closed').onSnapshot(onClosed,err);pill();}
 
-const TABS=[['entry','تسجيل البيانات',viewEntry,bindEntry],['kpi','مؤشرات الأداء',viewKpi,bindKpi],['log','السجل اليومي',viewLog,bindLog],['tot','إجماليات مراكز العمل',viewTot,bindTot],['close','إقفال الأصناف',viewClose,bindClose],['dt','ساعات التوقف',viewDT,bindDT],['stops','التوقفات المفترضة',viewStops,bindStops],['map','مراكز العمل',viewMap,bindMap],['set','الاستبعاد والإعدادات',viewSettings,bindSettings],['data','البيانات',viewData,bindData],['guide','دليل الاستخدام',viewGuide,()=>{}]];
+const TABS=[['entry','تسجيل البيانات',viewEntry,bindEntry],['kpi','مؤشرات الأداء',viewKpi,bindKpi],['log','السجل اليومي',viewLog,bindLog],['tot','إجماليات مراكز العمل',viewTot,bindTot],['close','التصنيع على النظام',viewClose,bindClose],['dt','ساعات التوقف',viewDT,bindDT],['stops','التوقفات المفترضة',viewStops,bindStops],['map','مراكز العمل',viewMap,bindMap],['set','الاستبعاد والإعدادات',viewSettings,bindSettings],['data','البيانات',viewData,bindData],['guide','دليل الاستخدام',viewGuide,()=>{}]];
 
 /* ================= GitHub Pages mode: data.json in the repo, token typed once and kept in this browser only ================= */
 let ghDirty=false,ghBusy=false,ghLast=null,ghBaseObj=null,ghT=0,ghLastPull=0;const GHB=KEY+'_ghbase',ghVol=['selDay','lastEntryDay','monthStart'];
@@ -1346,7 +1392,7 @@ document.addEventListener('visibilitychange',()=>{if(!GHC||document.visibilitySt
 window.addEventListener('beforeunload',e=>{if(GHC&&ghDirty){e.preventDefault();e.returnValue='';}});
 
 const EDIT_TABS=['entry','map','set','data','close'];
-function render(){recompute();const warn=health().length;if(HOSTED&&!cloudReady()){$('#tabs').innerHTML='';$('#view').innerHTML=`<div class="card"><h3>${CLOUD.status==='nodb'?'⚠ يجب فتح الصفحة من claude.ai وإنت مسجل دخول':'⏳ جاري تحميل البيانات من الموقع...'}</h3></div>`;return;}if(HOSTED&&!CLOUD.canWrite&&EDIT_TABS.includes(tab))tab='kpi';const TL=TABS.filter(t=>!(HOSTED&&!CLOUD.canWrite&&EDIT_TABS.includes(t[0])));$('#tabs').innerHTML=TL.map(t=>`<button class="tab ${t[0]===tab?'on':''} ${t[0]==='entry'?'hot':''}" data-t="${t[0]}">${t[1]}${t[0]==='map'&&warn?' ⚠':''}</button>`).join('');
+function render(){recompute();const warn=health().length;if(HOSTED&&!cloudReady()){$('#tabs').innerHTML='';$('#view').innerHTML=`<div class="card"><h3>${CLOUD.status==='nodb'?'⚠ يجب فتح الصفحة من claude.ai وإنت مسجل دخول':'⏳ جاري تحميل البيانات من الموقع...'}</h3></div>`;return;}if(HOSTED&&!CLOUD.canWrite&&EDIT_TABS.includes(tab))tab='kpi';if(!tabAllowed(tab))tab='entry';admLabel();const TL=TABS.filter(t=>tabAllowed(t[0])&&!(HOSTED&&!CLOUD.canWrite&&EDIT_TABS.includes(t[0])));$('#tabs').innerHTML=TL.map(t=>`<button class="tab ${t[0]===tab?'on':''} ${t[0]==='entry'?'hot':''}" data-t="${t[0]}">${t[1]}${t[0]==='map'&&warn?' ⚠':''}</button>`).join('');
   $$('#tabs .tab').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render();});$$('#tabs .tab').forEach(b=>b.title=b.textContent.trim());{const on=$('#tabs .tab.on');if(on&&on.scrollIntoView)on.scrollIntoView({inline:'center',block:'nearest'});}const t=TL.find(x=>x[0]===tab)||TL[0];const sy=window.scrollY;$('#view').innerHTML=t[2]();t[3]();window.scrollTo(0,sy);}
 document.addEventListener('DOMContentLoaded',()=>{
   $('#file').onchange=e=>{if(e.target.files[0])readFile(e.target.files[0]);e.target.value='';};
@@ -1356,7 +1402,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 function fixHeads(){$$('table.kt thead').forEach(t=>{const r=t.rows;if(r.length<2)return;const h=r[0].getBoundingClientRect().height;if(!h)return;[...r[1].cells].forEach(c=>{c.style.top=h+'px';});});}
 const setHH=()=>{const h=document.querySelector('header');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px');};setHH();window.addEventListener('resize',setHH);if(window.ResizeObserver&&document.querySelector('header'))new ResizeObserver(setHH).observe(document.querySelector('header'));
 (function(){const h=document.querySelector('header');if(h){const b=document.createElement('button');b.id='pk';b.title='بحث سريع (Ctrl+K)';b.innerHTML='بحث سريع <span class="kbd">Ctrl K</span>';b.onclick=openPalette;h.appendChild(b);if(GHC){const sy=document.createElement('button');sy.id='gsync';sy.title='سحب آخر بيانات من GitHub ودمجها';sy.textContent='⟳ مزامنة';sy.onclick=()=>ghInit(true);h.appendChild(sy);}const t=document.createElement('button');t.id='sbt';t.title='طي / توسيع القائمة الجانبية';t.textContent='☰';t.onclick=()=>{document.body.classList.toggle('sbc');try{localStorage.setItem('jv_sbc',document.body.classList.contains('sbc')?'1':'0');}catch(e){}};h.appendChild(t);}
-document.body.classList.add('sb');try{if(localStorage.getItem('jv_sbc')==='1')document.body.classList.add('sbc');}catch(e){}
+initThemeAdmin();document.body.classList.add('sb');try{if(localStorage.getItem('jv_sbc')==='1')document.body.classList.add('sbc');}catch(e){}
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPalette();}});})();
 let fhT=0;const fhQ=()=>{cancelAnimationFrame(fhT);fhT=requestAnimationFrame(fixHeads);};
 new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});window.addEventListener('resize',fhQ);
