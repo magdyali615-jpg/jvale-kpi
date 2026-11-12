@@ -170,6 +170,8 @@ td.rsn{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap
  body.sb .drawer{top:calc(var(--hh,64px) + 14px);max-height:calc(100vh - var(--hh,64px) - 30px)}
 }
 @media(max-width:1099px){#sbt{display:none}}
+.psug{position:fixed;z-index:300;display:none;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 34px rgba(0,0,0,.28);overflow:auto;padding:4px}
+.psh{font-size:12px;color:var(--mut);padding:6px 10px 3px}.psi{padding:7px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:baseline;gap:14px}.psi small{color:var(--mut);white-space:nowrap;font-size:11.5px}.psi.on,.psi:hover{background:rgba(28,111,181,.16)}
 </style></head><body>
 <header><h1><span class="brand">Jvale</span><span class="sep">|</span>قسم الإنتاج<small>منظومة متابعة مؤشرات الأداء الصناعي (OEE)</small></h1><label class="btn">فتح ملف<input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv,.json" hidden></label><button id="xr" title="تصدير تقرير Excel بنفس تنسيق الشيتات للإرسال">تصدير تقرير Excel</button><span id="savest" class="pill ok"></span><button id="bk" title="حفظ في ملف على جهازك (يُحدَّد المكان مرة واحدة ثم يتم الحفظ تلقائيًا)">حفظ الآن</button><button id="rs">استعادة الإعدادات الأولية</button></header>
 <div id="tabs"></div><main id="view"></main><div id="toasts"></div>
@@ -402,25 +404,53 @@ const adminSet=()=>!!S.settings.adminHash,hiddenTabs=()=>Array.isArray(S.setting
 const isAdmin=()=>{if(!adminSet())return true;try{return localStorage.getItem(ADK)===S.settings.adminHash;}catch(e){return false;}};
 const tabAllowed=k=>isAdmin()||!hiddenTabs().includes(k);
 function askPin(msg){return new Promise(res=>{const o=document.createElement('div');o.className='modal';o.innerHTML=`<div class="mbox"><p>${esc(msg)}</p><input type="password" inputmode="numeric" autocomplete="off" style="width:100%"><div class="row"><button class="pri" data-ok>تأكيد</button><button data-no>إلغاء</button></div></div>`;document.body.appendChild(o);const i=o.querySelector('input'),done=v=>{o.remove();res(v);};o.querySelector('[data-ok]').onclick=()=>done(i.value);o.querySelector('[data-no]').onclick=()=>done(null);i.onkeydown=e=>{if(e.key==='Enter')done(i.value);else if(e.key==='Escape')done(null);};i.focus();});}
-function admLabel(){const b=$('#adm');if(!b)return;b.textContent=!adminSet()?'🔓 تقييد التبويبات':isAdmin()?'🔓 وضع المسؤول':'🔒 دخول المسؤول';b.title=!adminSet()?'إخفاء تبويبات محددة عن المستخدمين برقم سري':isAdmin()?'اضغط للخروج من وضع المسؤول':'أدخل الرقم السري لإظهار التبويبات المقيّدة';}
+function adminPush(){if(!HOSTED&&GHC)ghSave();else toast('احفظ الملف أو زامن البيانات ليصل القفل إلى باقي الأجهزة','warn');}
+function admLabel(){const b=$('#adm');if(!b)return;b.style.display=adminSet()?'':'none';b.textContent=isAdmin()?'🔓 وضع المسؤول':'🔒 دخول المسؤول';b.title=isAdmin()?'اضغط للخروج من وضع المسؤول':'أدخل الرقم السري';}
 async function setNewPin(){const p1=await askPin('أنشئ رقمًا سريًا للمسؤول (4 خانات على الأقل). التبويبات المقيّدة ستُخفى عن بقية المستخدمين.');if(p1==null)return false;if(String(p1).trim().length<4){toast('الرقم السري قصير — 4 خانات على الأقل','warn');return false;}
   const p2=await askPin('أعد إدخال الرقم السري للتأكيد');if(p2!==p1){toast('الرقمان غير متطابقين','warn');return false;}
   S.settings.adminHash=pinHash(p1);if(!Array.isArray(S.settings.hiddenTabs))S.settings.hiddenTabs=['stops','map','set'];try{localStorage.setItem(ADK,S.settings.adminHash);}catch(e){}save();return true;}
 async function adminClick(){
-  if(!adminSet()){if(await setNewPin()){render();toast('✔ تم تفعيل قفل التبويبات — أنت الآن في وضع المسؤول');}return;}
+  if(!adminSet()){if(await setNewPin()){render();toast('✔ تم تفعيل قفل التبويبات — أنت الآن في وضع المسؤول');adminPush();}return;}
   if(isAdmin()){try{localStorage.removeItem(ADK);}catch(e){}if(!tabAllowed(tab))tab='entry';render();toast('تم الخروج من وضع المسؤول');return;}
   const p=await askPin('أدخل الرقم السري للمسؤول');if(p==null)return;
   if(pinHash(p)===S.settings.adminHash){try{localStorage.setItem(ADK,S.settings.adminHash);}catch(e){}render();toast('✔ تم الدخول إلى وضع المسؤول');}else toast('الرقم السري غير صحيح','warn');}
-function adminCard(){return `<div class="card"><h3>وضع المسؤول وإخفاء التبويبات</h3><p class="muted">التبويبات المحددة أدناه تظهر لك أنت فقط بعد إدخال الرقم السري، وتُخفى عن بقية المستخدمين. هذا إخفاء من الواجهة وليس حماية أمنية كاملة، فلا تعتمد عليه لحماية بيانات حساسة.</p>
+function adminCard(){return `<div class="card"><h3>وضع المسؤول وإخفاء التبويبات</h3><p class="muted">التبويبات المحددة أدناه تظهر لك أنت فقط بعد إدخال الرقم السري، وتُخفى عن بقية المستخدمين. هذا إخفاء من الواجهة وليس حماية أمنية كاملة، فلا تعتمد عليه لحماية بيانات حساسة. بعد أي تغيير تُرفع الإعدادات إلى GitHub تلقائيًا (يلزم Token على هذا الجهاز) لتصل إلى باقي الأجهزة، وعلى الجهاز الآخر حدّث الصفحة.</p>
   <div class="row">${TABS.filter(t=>t[0]!=='entry').map(t=>`<label><input type="checkbox" data-ht="${t[0]}" ${hiddenTabs().includes(t[0])?'checked':''}> ${t[1]}</label>`).join('')}</div>
-  <div class="row"><span class="muted">حالة القفل: ${adminSet()?'<b>مفعّل</b>':'غير مفعّل (كل التبويبات ظاهرة للجميع)'}</span><button id="admpin" type="button">${adminSet()?'تغيير الرقم السري':'تفعيل القفل بالرقم السري'}</button>${adminSet()?'<button id="admoff" type="button" class="del">إلغاء القفل وإظهار كل التبويبات للجميع</button>':''}</div></div>`;}
-function bindAdminCard(){$$('[data-ht]').forEach(c=>c.onchange=()=>{const set=new Set(hiddenTabs());if(c.checked)set.add(c.dataset.ht);else set.delete(c.dataset.ht);S.settings.hiddenTabs=[...set];save();toast('✔ تم حفظ التبويبات المقيّدة');});
-  const pb=$('#admpin');if(pb)pb.onclick=async()=>{if(await setNewPin()){render();toast('✔ تم حفظ الرقم السري');}};
-  const ao=$('#admoff');if(ao)ao.onclick=async()=>{if(!await ask('إلغاء القفل؟ ستظهر كل التبويبات لجميع المستخدمين.','نعم، إلغاء القفل'))return;delete S.settings.adminHash;try{localStorage.removeItem(ADK);}catch(e){}save();render();toast('تم إلغاء القفل');};}
+  <div class="row"><span class="muted">حالة القفل: ${adminSet()?'<b>مفعّل</b>':'غير مفعّل (كل التبويبات ظاهرة للجميع)'}</span><button id="admpin" type="button">${adminSet()?'تغيير الرقم السري':'تفعيل القفل بالرقم السري'}</button>${adminSet()?'<button id="admsync" type="button">رفع إعدادات القفل إلى GitHub الآن</button><button id="admoff" type="button" class="del">إلغاء القفل وإظهار كل التبويبات للجميع</button>':''}</div></div>`;}
+function bindAdminCard(){$$('[data-ht]').forEach(c=>c.onchange=()=>{const set=new Set(hiddenTabs());if(c.checked)set.add(c.dataset.ht);else set.delete(c.dataset.ht);S.settings.hiddenTabs=[...set];save();toast('✔ تم حفظ التبويبات المقيّدة');if(adminSet())adminPush();});
+  const pb=$('#admpin');if(pb)pb.onclick=async()=>{if(await setNewPin()){render();toast('✔ تم حفظ الرقم السري');adminPush();}};
+  const asy=$('#admsync');if(asy)asy.onclick=adminPush;const ao=$('#admoff');if(ao)ao.onclick=async()=>{if(!await ask('إلغاء القفل؟ ستظهر كل التبويبات لجميع المستخدمين.','نعم، إلغاء القفل'))return;delete S.settings.adminHash;try{localStorage.removeItem(ADK);}catch(e){}save();render();toast('تم إلغاء القفل');adminPush();};}
 function initThemeAdmin(){const h=document.querySelector('header');if(!h)return;
   const t=document.createElement('button');t.id='thm';t.type='button';t.onclick=cycleTheme;h.appendChild(t);
   const a=document.createElement('button');a.id='adm';a.type='button';a.onclick=adminClick;h.appendChild(a);
   applyTheme(themeMode());admLabel();}
+/* ---------- product autocomplete: full per-work-center memory with search ---------- */
+let PSUG=null;
+function closeSug(){if(PSUG)PSUG.style.display='none';}
+function attachSuggest(inp,getWc,onPick){if(!inp)return;
+  let idx=-1,items=[];const box=()=>{if(!PSUG){PSUG=document.createElement('div');PSUG.className='psug';document.body.appendChild(PSUG);window.addEventListener('scroll',e=>{if(PSUG&&!PSUG.contains(e.target))closeSug();},true);window.addEventListener('resize',closeSug);}return PSUG;};
+  const cycOf=(M_,wn,pn)=>{const k=K.norm(pn),a=M_.wc.get(wn),p=a&&a.prods.get(k);if(p&&p.cyc)return p.cyc;const g=M_.pr.get(k);return g?g.cyc:0;};
+  const hl=(t,q)=>esc(t);
+  const draw=()=>{const M_=mem(),wn=K.norm(getWc()),a=M_.wc.get(wn),qt=stoks(inp.value),total=a?a.prods.size:0,b=box();
+    const sc=p=>qt.length?matchScore(qt,stoksC(p.prod),0.75):1;
+    const own=(a?[...a.prods.values()]:[]).map(p=>({p,sc:sc(p),own:true})).filter(x=>x.sc>0).sort((x,y)=>y.sc-x.sc||y.p.last-x.p.last||y.p.n-x.p.n);
+    const seen=new Set(own.map(x=>K.norm(x.p.prod)));
+    const oth=qt.length?[...M_.pr.values()].filter(g=>!seen.has(K.norm(g.prod))).map(g=>({p:{prod:g.prod,cyc:g.cyc,last:g.last,n:0},sc:sc(g),own:false,wc:g.wc})).filter(x=>x.sc>0).sort((x,y)=>y.sc-x.sc||y.p.last-x.p.last).slice(0,8):[];
+    items=own.concat(oth);if(idx>=items.length)idx=items.length-1;
+    let h='';if(!items.length){h=wn?(total?`<div class="psh">لا توجد أصناف مطابقة على هذه الماكينة — سيُسجَّل «${esc(inp.value)}» كصنف جديد</div>`:'<div class="psh">لا توجد أصناف سابقة على هذه الماكينة</div>'):'<div class="psh">اختر مركز العمل أولًا لعرض أصنافه</div>';}
+    else{let sep=false;if(own.length)h+=`<div class="psh">أصناف سبق تسجيلها على هذه الماكينة (${own.length}${qt.length&&own.length!==total?' من '+total:''})</div>`;
+      items.forEach((x,i)=>{if(!x.own&&!sep){sep=true;h+='<div class="psh">من ماكينات أخرى (راجع زمن الدورة)</div>';}
+        h+=`<div class="psi ${i===idx?'on':''}" data-i="${i}"><b>${hl(x.p.prod,qt)}</b><small>${x.p.cyc?x.p.cyc+' ث':'بدون زمن دورة'} · ${x.own?x.p.n+' مرة · آخر '+iso(x.p.last).slice(5):esc(x.wc||'')}</small></div>`;});}
+    b.innerHTML=h;const r=inp.getBoundingClientRect(),w=Math.max(r.width,320),left=Math.max(8,Math.min(r.left,window.innerWidth-w-8));
+    b.style.cssText=`display:block;left:${left}px;top:${r.bottom+3}px;width:${w}px;max-height:${Math.max(160,Math.min(320,window.innerHeight-r.bottom-14))}px`;
+    $$('.psi',b).forEach(e=>{e.onmousedown=ev=>{ev.preventDefault();pick(+e.dataset.i);};});
+    const on=b.querySelector('.psi.on');if(on)on.scrollIntoView({block:'nearest'});};
+  const pick=i=>{const x=items[i];if(!x)return;closeSug();const wn=K.norm(getWc());onPick(x.p.prod,cycOf(mem(),wn,x.p.prod));};
+  inp.addEventListener('focus',()=>{idx=-1;draw();});inp.addEventListener('input',()=>{idx=-1;draw();});inp.addEventListener('click',()=>{if(!PSUG||PSUG.style.display==='none')draw();});
+  inp.addEventListener('blur',()=>setTimeout(closeSug,120));
+  inp.addEventListener('keydown',e=>{if(!PSUG||PSUG.style.display==='none'){if(e.key==='ArrowDown'){draw();e.preventDefault();}return;}
+    if(e.key==='ArrowDown'){idx=Math.min(items.length-1,idx+1);draw();e.preventDefault();}else if(e.key==='ArrowUp'){idx=Math.max(0,idx-1);draw();e.preventDefault();}
+    else if(e.key==='Enter'&&idx>=0){e.preventDefault();e.stopPropagation();pick(idx);}else if(e.key==='Escape'){closeSug();}},true);}
 /* ---------- Dashboard (top of KPI tab): rings, month trend, department bars ---------- */
 const DB={hide:new Set(),scope:'month'},KP3=[['u','استغلال الطاقة',.85,'#1c6fb5'],['p','الأداء',1,'#7c3aed'],['a','التوافر',1,'#0d9488']];
 const pcs=v=>v==null?'—':(Math.round(v*1000)/10).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
@@ -777,7 +807,7 @@ function drawDrawer(){const el=$('#bdrawer');if(!el)return;const d=entryDay(),m=
    <div class="trk-sum" style="margin:8px 0 12px;grid-template-columns:repeat(3,1fr)"><div class="tile"><b>${r2(m.qty)}</b><span>كمية</span></div><div class="tile"><b>${r2(m.run)}</b><span>ساعات التشغيل</span></div><div class="tile"><b>${r2(m.stop)}</b><span>ساعات توقف</span></div></div>
    <h4 style="margin-top:4px">المسجَّل اليوم <span class="muted">(قابل للتعديل مباشرة)</span></h4>${m.rows.length?m.rows.map(rowH).join(''):'<p class="muted" style="margin:0 0 8px">لا يوجد تسجيل لهذه الماكينة في هذا اليوم حتى الآن</p>'}
    <h4>إضافة تسجيل</h4>${prods.length?`<div class="muted" style="font-size:12px">أصناف سبق تسجيلها على هذه الماكينة (مع زمن الدورة)</div><div class="chips">${prods.map(p=>`<button type="button" class="chip pc ${K.norm(dr.prod)===K.norm(p.prod)?'on':''}" data-bp="${esc(p.prod)}">${esc(p.prod)}${p.cyc?' · '+p.cyc+' ث':''}</button>`).join('')}</div>`:glob.length?`<div class="muted" style="font-size:12px">لا توجد أصناف سابقة على هذه الماكينة — أحدث الأصناف من ماكينات أخرى (راجع زمن الدورة)</div><div class="chips">${glob.map(p=>`<button type="button" class="chip pc" data-bp="${esc(p.prod)}">${esc(p.prod)}${p.cyc?' · '+p.cyc+' ث':''}</button>`).join('')}</div>`:''}
-   <input id="bd_prod" list="bd_pl" placeholder="الصنف" value="${esc(dr.prod)}" autocomplete="off"><datalist id="bd_pl">${prods.map(p=>`<option value="${esc(p.prod)}">${p.cyc?p.cyc+' ث':''}</option>`).join('')}${[...MM.pr.values()].filter(p=>!(a&&a.prods.has(K.norm(p.prod)))).sort((x,y)=>y.last-x.last).slice(0,150).map(p=>`<option value="${esc(p.prod)}">${p.cyc?p.cyc+' ث — '+esc(p.wc):''}</option>`).join('')}</datalist>
+   <input id="bd_prod" placeholder="الصنف — اكتب أي جزء من الاسم للبحث" value="${esc(dr.prod)}" autocomplete="off"><datalist id="bd_pl">${prods.map(p=>`<option value="${esc(p.prod)}">${p.cyc?p.cyc+' ث':''}</option>`).join('')}${[...MM.pr.values()].filter(p=>!(a&&a.prods.has(K.norm(p.prod)))).sort((x,y)=>y.last-x.last).slice(0,150).map(p=>`<option value="${esc(p.prod)}">${p.cyc?p.cyc+' ث — '+esc(p.wc):''}</option>`).join('')}</datalist>
    <div class="g2" style="margin-top:6px"><input id="bd_qty" type="number" step="any" placeholder="الكمية المنتجة" value="${dr.qty}"><input id="bd_cyc" type="number" step="any" placeholder="زمن القطعة (ث)" value="${dr.cyc}"></div>
    <div class="chips" style="margin:6px 0 4px">${[sh,6,4,2].filter((v,i,a)=>v>0&&a.indexOf(v)===i).map(v=>`<button type="button" class="chip pc" data-bh="${v}">${v} س</button>`).join('')}${rem>0&&rem!==sh?`<button type="button" class="chip pc" data-bh="${rem}">باقي الوردية ${rem} س</button>`:''}</div>
    <input id="bd_hrs" type="number" step="any" placeholder="ساعات التشغيل" value="${dr.hrs}">
@@ -789,6 +819,7 @@ function drawDrawer(){const el=$('#bdrawer');if(!el)return;const d=entryDay(),m=
   $$('#bdrawer [data-bp]').forEach(b=>b.onclick=()=>{BO.dr.prod=b.dataset.bp;const c=cycOf(b.dataset.bp);if(c)BO.dr.cyc=c;drawDrawer();$('#bd_qty').focus();});
   $$('#bdrawer [data-bh]').forEach(b=>b.onclick=()=>{BO.dr.hrs=b.dataset.bh;$('#bd_hrs').value=b.dataset.bh;});
   $$('#bdrawer [data-br]').forEach(b=>b.onclick=()=>{BO.dr.cs=b.dataset.br;$$('#bdrawer [data-br]').forEach(x=>x.classList.toggle('on',x===b));$('#bd_cs').value=b.dataset.br;});
+  closeSug();attachSuggest($('#bd_prod'),()=>m.wc,(prod,c)=>{BO.dr.prod=prod;if(c)BO.dr.cyc=c;drawDrawer();$('#bd_qty').focus();});
   $('#bd_prod').oninput=e=>{BO.dr.prod=e.target.value;const c=cycOf(e.target.value);if(c&&!BO.dr.cyc){BO.dr.cyc=c;$('#bd_cyc').value=c;}};$('#bd_prod').onchange=e=>{const c=cycOf(e.target.value);if(c){BO.dr.cyc=c;$('#bd_cyc').value=c;}};
   $('#bd_qty').oninput=e=>BO.dr.qty=e.target.value;$('#bd_cyc').oninput=e=>BO.dr.cyc=e.target.value;$('#bd_hrs').oninput=e=>BO.dr.hrs=e.target.value;$('#bd_cs').oninput=e=>BO.dr.cs=e.target.value;
   $('#bd_qty').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#bd_hrs').focus();}};$('#bd_hrs').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#bd_next').click();}};
@@ -855,7 +886,7 @@ function viewEntry(){const d=entryDay();
    <div class="board"><div id="bgrid"></div><div id="bdrawer" class="drawer"></div></div></div>
   <details class="card"><summary><b>إدخال متقدّم</b> <span class="muted">— ماكينة جديدة غير موجودة في الخريطة، setup / changeover / breakdown، تكرار آخر صف</span></summary>
   <div class="fgrid"><div><label>Work center</label><input id="fwc" list="dl_ewc" autocomplete="off" placeholder="أدخل أو اختر"></div>
-   <div><label>Product (الصنف)</label><input id="fpr" list="dl_epr" autocomplete="off" placeholder="الصنف"></div>
+   <div><label>Product (الصنف)</label><input id="fpr" autocomplete="off" placeholder="الصنف"></div>
    <div><label>Theoritical cycle time (ثانية)</label><input id="fcy" type="number" step="any" min="0"></div>
    <div><label>Actual Production (الكمية)</label><input id="fqt" type="number" step="any" min="0"></div>
    <div><label>Model Working Time (ساعات)</label><input id="fhr" type="number" step="any" min="0"></div>
@@ -911,7 +942,7 @@ function bindEntry(){const set=()=>{drawProducts();drawEntrySummary();drawEntryR
   const go=d=>{EN.day=d;S.settings.lastEntryDay=d;save();$('#eday').value=iso(d);set();};
   $('#eday').onchange=e=>{const v=isoToSer(e.target.value);if(v)go(v);};$('#dprev').onclick=()=>go(entryDay()-1);$('#dnext').onclick=()=>go(entryDay()+1);
   $('#dlast').onclick=()=>{const ds=S.data.map(r=>r.day);if(ds.length)go(Math.max(...ds));};
-  $('#fwc').oninput=onWc;$('#fwc').onchange=()=>{onWc();};$('#fpr').onchange=onProd;$('#fpr').onfocus=()=>{if(!$('#fpr').value&&$('#dl_epr').options.length){try{$('#fpr').showPicker&&$('#fpr').showPicker();}catch(e){}}};
+  $('#fwc').oninput=onWc;$('#fwc').onchange=()=>{onWc();};$('#fpr').onchange=onProd;attachSuggest($('#fpr'),()=>$('#fwc').value,(prod)=>{$('#fpr').value=prod;onProd();$('#fqt').focus();});
   $('#fpr').oninput=()=>{const p=K.norm($('#fpr').value);if(mem().wc.get(K.norm($('#fwc').value))&&mem().wc.get(K.norm($('#fwc').value)).prods.has(p))onProd();};
   ['fwc','fpr','fcy','fqt','fhr'].forEach(id=>$('#'+id).addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();if(id==='fpr')onProd();if(id==='fhr'||!focusNext(id))addFromForm();}));
   $('#fadd').onclick=addFromForm;$('#fmore').onclick=()=>{const s=$('#fxs');s.style.display=s.style.display==='none'?'flex':'none';};
