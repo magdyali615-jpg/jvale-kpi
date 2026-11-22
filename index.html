@@ -1387,7 +1387,7 @@ function buildReport(){const d=S.settings.selDay,sheets=[],stamp='مولّد م�
     
 const W=new Sh(sheetName,{
   rtl:true,
-  widths:[14,23,23,34,19,19,19,18,18,22,36,20,16,17],
+  widths:[14,23,23,34,19,19,19,18,18,36,20,16,17],
   freeze:6
 });
 
@@ -1397,11 +1397,6 @@ W.set(3,1,'عدد مراكز العمل','bold').set(3,2,dg.wcs.size,'num2');
 
 W.set(4,1,
   'كل صف يمثل صنفاً أو ملخص تشغيل يومي. بيانات التشغيل تظهر مرة واحدة لكل مركز عمل وتاريخ لتجنب تكرارها عند حساب المؤشرات.',
-  'note'
-);
-
-W.set(5,1,
-  'طريقة حساب الطاقة القصوى: الوقت المخطط (دقيقة) × 60 ÷ زمن الدورة المستخدم (ثانية/قطعة). زمن الدورة المستخدم هو معدل الدورة المكافئ المحسوب من بيانات الإنتاج، ويعكس الزمن النظري المستخدم في الحساب.',
   'note'
 );
 
@@ -1416,7 +1411,6 @@ const headers=[
   'الزمن المثالي (دقيقة)',
   'الإنتاج الفعلي',
   'الطاقة القصوى',
-  'زمن الدورة المستخدم (ثانية/قطعة)',
   'اسم المنتج',
   'زمن الدورة (ثانية)',
   'الكمية',
@@ -1508,21 +1502,21 @@ for(const [key,g] of ordered){
 
       products.forEach((x,index)=>{
 
-               const values=[
+        const first=index===0;
+
+        const values=[
           day,
           first?'تشغيل + صنف':'تفاصيل صنف',
           dept,
           g.isFridgeAggregate?g.wc:x.wc,
-        
+
+          // بيانات التشغيل تظهر مرة واحدة فقط
           first&&summary?summary.plan:'',
           first&&summary?summary.run:'',
           first&&summary?summary.ideal:'',
           first&&summary?summary.qty:'',
           first&&summary?summary.cap:'',
-        
-          first&&summary&&summary.cap>0&&summary.plan>0
-            ?summary.plan*60/summary.cap:'',
-        
+
           x.prod,
           x.cyc,
           x.qty,
@@ -1534,8 +1528,8 @@ for(const [key,g] of ordered){
           let style='txt';
 
           if(j===0)style='date';
-          else if(j>=4 && j<=9)style='num1';
-          else if(j>=11)style='num1';
+          else if(j>=4 && j<=8)style='num1';
+          else if(j>=10)style='num1';
 
           W.set(row,j+1,v==null?'':v,style);
 
@@ -1547,7 +1541,7 @@ for(const [key,g] of ordered){
     }else{
 
       // يوم فيه تشغيل بدون أصناف مسجلة
-            const values=[
+      const values=[
         day,
         'ملخص تشغيل يومي',
         dept,
@@ -1557,8 +1551,6 @@ for(const [key,g] of ordered){
         summary?summary.ideal:'',
         summary?summary.qty:'',
         summary?summary.cap:'',
-        summary&&summary.cap>0&&summary.plan>0
-          ?summary.plan*60/summary.cap:'',
         '',
         '',
         '',
@@ -1569,7 +1561,7 @@ for(const [key,g] of ordered){
         let style='txt';
 
         if(j===0)style='date';
-        else if(j>=4 && j<=9)style='num1';
+        else if(j>=4 && j<=8)style='num1';
 
         W.set(row,j+1,v==null?'':v,style);
       });
@@ -1581,7 +1573,7 @@ for(const [key,g] of ordered){
 
 // فلتر واحد على التقرير بالكامل
 if(row>headerRow+1){
-  W.filter=`A${headerRow}:N${row-1}`;
+  W.filter=`A${headerRow}:M${row-1}`;
 }
 
 sheets.push(W);
