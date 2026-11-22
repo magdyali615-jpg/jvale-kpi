@@ -1363,222 +1363,63 @@ function buildReport(){const d=S.settings.selDay,sheets=[],stamp='مولّد م�
   T.set(rr,1,'الإجمالي الكلي','tTxt').set(rr,2,'','tTxt').set(rr,3,gt.rows,'tNum').set(rr,4,'','tTxt').set(rr,5,r2(gt.qty),'tNum').set(rr,6,r2(gt.run),'tNum').set(rr,7,r2(gt.stop),'tNum').set(rr,8,r2(gt.run+gt.stop),'tNum');sheets.push(T);
 
   // شيت واحد لكل قسم، ويضم داخله جميع مراكز العمل التابعة له
-   const f0=S.settings.monthStart,t0=R.eom;
-   const monthData=S.data.filter(x=>!(x.x&&x.x.draft)&&x.day>=f0&&x.day<=t0);
-   const deptMap=new Map();
-   for(const x of monthData){
-     const key=K.norm(x.wc);
-     if(!key)continue;
-     const dept=deptOfN(key)||'غير مُسند';
-     let dg=deptMap.get(dept);
-     if(!dg)deptMap.set(dept,dg={dept,wcs:new Map()});
-     // استثناء قسم الثلاجات: جميع مراكز العمل التابعة له تُعامل كمركز عمل واحد
-     const groupKey=dept==='قسم الثلاجات'?'__FRIDGE_DEPARTMENT_AS_ONE_WC__':key;
-     let wg=dg.wcs.get(groupKey);
-     if(!wg)dg.wcs.set(groupKey,wg={wc:dept==='قسم الثلاجات'?'قسم الثلاجات — مركز عمل موحد':x.wc,products:[],isFridgeAggregate:dept==='قسم الثلاجات'});
-     if(x.prod&&!isStop(x))wg.products.push(x);
-   }
-   const safeSheetName=(v)=>String(v||'قسم').replace(/[\\/?*\\[\\]:]/g,' ').trim().slice(0,31)||'قسم';
-   const usedNames=new Set(sheets.map(x=>x.name));
-   for(const [dept,dg] of deptMap){
-     const base=safeSheetName(dept);let sheetName=base,n=2;
-     while(usedNames.has(sheetName))sheetName=(base.slice(0,27)+' '+n++).slice(0,31);
-     usedNames.add(sheetName);
-     
- const W=new Sh(sheetName,{
-   rtl:true,
-   widths:[14,23,23,34,19,19,19,18,18,36,20,16,17],
-   freeze:6
- });
- 
- W.set(1,1,'التقرير الموحد لبيانات الإنتاج ومؤشرات KPI — '+dept,'title');
- W.set(2,1,'الفترة: '+iso(f0)+' إلى '+iso(t0),'note');
- W.set(3,1,'عدد مراكز العمل','bold').set(3,2,dg.wcs.size,'num2');
- 
- W.set(4,1,
-   'كل صف يمثل صنفاً أو ملخص تشغيل يومي. بيانات التشغيل تظهر مرة واحدة لكل مركز عمل وتاريخ لتجنب تكرارها عند حساب المؤشرات.',
-   'note'
- );
- 
- // عناوين الجدول الموحد
- const headers=[
-   'التاريخ',
-   'نوع السجل',
-   'القسم',
-   'مركز العمل',
-   'الوقت المخطط (دقيقة)',
-   'وقت التشغيل (دقيقة)',
-   'الزمن المثالي (دقيقة)',
-   'الإنتاج الفعلي',
-   'الطاقة القصوى',
-   'اسم المنتج',
-   'زمن الدورة (ثانية)',
-   'الكمية',
-   'ساعات العمل'
- ];
- 
- const headerRow=6;
- headers.forEach((v,i)=>W.set(headerRow,i+1,v,'hdr'));
- W.heights[headerRow]=42;
- 
- let row=headerRow+1;
- 
- const ordered=[...dg.wcs.entries()].sort(
-   (a,b)=>a[1].wc.localeCompare(b[1].wc,'ar')
- );
- 
- for(const [key,g] of ordered){
- 
-   let recs=[];
- 
-   // تجميع تشغيل الثلاجات كمركز عمل واحد
-   if(g.isFridgeAggregate){
- 
-     const daily=new Map();
- 
-     for(const x of R.recs.filter(x=>
-       deptOfN(K.norm(x.wc))===dept &&
-       x.day>=f0 && x.day<=t0
-     )){
-       let a=daily.get(x.day);
- 
-       if(!a){
-         a={
-           day:x.day,
-           plan:0,
-           run:0,
-           ideal:0,
-           qty:0,
-           cap:0
-         };
-         daily.set(x.day,a);
-       }
- 
-       ['plan','run','ideal','qty','cap'].forEach(k=>{
-         a[k]+=(+x[k]||0);
-       });
-     }
- 
-     recs=[...daily.values()];
- 
-   }else{
- 
-     recs=R.recs.filter(x=>
-       K.norm(x.wc)===key &&
-       x.day>=f0 &&
-       x.day<=t0
-     );
- 
-   }
- 
-   // خريطة ملخص التشغيل حسب التاريخ
-   const dailyMap=new Map();
-   recs.forEach(x=>dailyMap.set(x.day,x));
- 
-   // تجميع الأصناف حسب التاريخ
-   const productsByDay=new Map();
- 
-   for(const x of g.products){
-     if(!productsByDay.has(x.day)){
-       productsByDay.set(x.day,[]);
-     }
-     productsByDay.get(x.day).push(x);
-   }
- 
-   const allDays=[...new Set([
-     ...dailyMap.keys(),
-     ...productsByDay.keys()
-   ])].sort((a,b)=>a-b);
- 
-   for(const day of allDays){
- 
-     const summary=dailyMap.get(day);
-     const products=(productsByDay.get(day)||[]).slice().sort(
-       (a,b)=>String(a.prod||'').localeCompare(String(b.prod||''),'ar')
-     );
- 
-     // لو اليوم فيه أصناف: ندمج بيانات التشغيل مع أول صنف
-     if(products.length){
- 
-       products.forEach((x,index)=>{
- 
-         const first=index===0;
- 
-         const values=[
-           day,
-           first?'تشغيل + صنف':'تفاصيل صنف',
-           dept,
-           g.isFridgeAggregate?g.wc:x.wc,
- 
-           // بيانات التشغيل تظهر مرة واحدة فقط
-           first&&summary?summary.plan:'',
-           first&&summary?summary.run:'',
-           first&&summary?summary.ideal:'',
-           first&&summary?summary.qty:'',
-           first&&summary?summary.cap:'',
- 
-           x.prod,
-           x.cyc,
-           x.qty,
-           x.hrs
-         ];
- 
-         values.forEach((v,j)=>{
- 
-           let style='txt';
- 
-           if(j===0)style='date';
-           else if(j>=4 && j<=8)style='num1';
-           else if(j>=10)style='num1';
- 
-           W.set(row,j+1,v==null?'':v,style);
- 
-         });
- 
-         row++;
-       });
- 
-     }else{
- 
-       // يوم فيه تشغيل بدون أصناف مسجلة
-       const values=[
-         day,
-         'ملخص تشغيل يومي',
-         dept,
-         g.wc,
-         summary?summary.plan:'',
-         summary?summary.run:'',
-         summary?summary.ideal:'',
-         summary?summary.qty:'',
-         summary?summary.cap:'',
-         '',
-         '',
-         '',
-         ''
-       ];
- 
-       values.forEach((v,j)=>{
-         let style='txt';
- 
-         if(j===0)style='date';
-         else if(j>=4 && j<=8)style='num1';
- 
-         W.set(row,j+1,v==null?'':v,style);
-       });
- 
-       row++;
-     }
-   }
- }
- 
- // فلتر واحد على التقرير بالكامل
- if(row>headerRow+1){
-   W.filter=`A${headerRow}:M${row-1}`;
- }
- 
- sheets.push(W);
-
-  
+  const f0=S.settings.monthStart,t0=R.eom;
+  const monthData=S.data.filter(x=>!(x.x&&x.x.draft)&&x.day>=f0&&x.day<=t0);
+  const deptMap=new Map();
+  for(const x of monthData){
+    const key=K.norm(x.wc);
+    if(!key)continue;
+    const dept=deptOfN(key)||'غير مُسند';
+    let dg=deptMap.get(dept);
+    if(!dg)deptMap.set(dept,dg={dept,wcs:new Map()});
+    // استثناء قسم الثلاجات: جميع مراكز العمل التابعة له تُعامل كمركز عمل واحد
+    const groupKey=dept==='قسم الثلاجات'?'__FRIDGE_DEPARTMENT_AS_ONE_WC__':key;
+    let wg=dg.wcs.get(groupKey);
+    if(!wg)dg.wcs.set(groupKey,wg={wc:dept==='قسم الثلاجات'?'قسم الثلاجات — مركز عمل موحد':x.wc,products:[],isFridgeAggregate:dept==='قسم الثلاجات'});
+    if(x.prod&&!isStop(x))wg.products.push(x);
+  }
+  const safeSheetName=(v)=>String(v||'قسم').replace(/[\\/?*\\[\\]:]/g,' ').trim().slice(0,31)||'قسم';
+  const usedNames=new Set(sheets.map(x=>x.name));
+  for(const [dept,dg] of deptMap){
+    const base=safeSheetName(dept);let sheetName=base,n=2;
+    while(usedNames.has(sheetName))sheetName=(base.slice(0,27)+' '+n++).slice(0,31);
+    usedNames.add(sheetName);
+    const W=new Sh(sheetName,{rtl:true,widths:[16,26,30,38,18,17,17],freeze:5});
+    W.set(1,1,'تقرير القسم — '+dept,'title');
+    W.set(2,1,'الفترة: '+iso(f0)+' إلى '+iso(t0),'note');
+    W.set(3,1,'عدد مراكز العمل','bold').set(3,2,dg.wcs.size,'num2');
+    let row=5;
+    const ordered=[...dg.wcs.entries()].sort((a,b)=>a[1].wc.localeCompare(b[1].wc,'ar'));
+    for(const [key,g] of ordered){
+      let recs;
+      if(g.isFridgeAggregate){
+        const daily=new Map();
+        for(const x of R.recs.filter(x=>deptOfN(K.norm(x.wc))===dept&&x.day>=f0&&x.day<=t0)){
+          let a=daily.get(x.day);
+          if(!a)daily.set(x.day,a={day:x.day,plan:0,run:0,ideal:0,qty:0,cap:0});
+          ['plan','run','ideal','qty','cap'].forEach(k=>a[k]+=(+x[k]||0));
+        }
+        recs=[...daily.values()].sort((a,b)=>a.day-b.day);
+      }else{
+        recs=R.recs.filter(x=>K.norm(x.wc)===key&&x.day>=f0&&x.day<=t0);
+      }
+      if(!recs.length&&!g.products.length)continue;
+      W.set(row,1,'مركز العمل: '+g.wc,'title');row++;
+      W.set(row,1,'عدد المنتجات المسجلة','bold').set(row,2,g.products.length,'num2');row+=2;
+      const h=['التاريخ','وقت مخطط (دقيقة)','وقت تشغيل (دقيقة)','زمن مثالي (دقيقة)','الإنتاج الفعلي','الطاقة القصوى'];
+      h.forEach((v,i)=>W.set(row,i+1,v,'hdr'));
+      recs.forEach((x,i)=>[x.day,x.plan,x.run,x.ideal,x.qty,x.cap].forEach((v,j)=>W.set(row+1+i,j+1,v==null?'':v,j===0?'date':'num1')));
+      row+=Math.max(recs.length,1)+2;
+      W.set(row,1,'تفاصيل المنتجات — '+g.wc,'bold');row++;
+      const ph=['التاريخ','القسم','مركز العمل','اسم المنتج','زمن الدورة (ثانية)','الكمية','ساعات العمل'];
+      ph.forEach((v,i)=>W.set(row,i+1,v,'hdr'));
+      const productHeader=row;
+      g.products.forEach((x,i)=>[x.day,dept,g.isFridgeAggregate?g.wc:x.wc,x.prod,x.cyc,x.qty,x.hrs].forEach((v,j)=>W.set(row+1+i,j+1,v==null?'':v,j===0?'date':(j>=4?'num1':'txt'))));
+      if(g.products.length)W.filter=`A${productHeader}:G${productHeader+g.products.length}`;
+      row+=Math.max(g.products.length,1)+3;
+    }
+    sheets.push(W);
+  }
   return sheets;}
 function exportReport(){if(S.settings.selDay==null)return toast('لا توجد بيانات في هذا الشهر','warn');saveFile(`Jvale_KPI_Report_${iso(S.settings.selDay)}.xlsx`,xlsxBlob(buildReport()));toast('✔ تم تنزيل التقرير: اليوم المختار '+iso(S.settings.selDay)+' + تراكمي الشهر + سجل الأيام + التوقف + تجميع مركز العمل');}
 
