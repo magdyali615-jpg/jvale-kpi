@@ -1388,36 +1388,135 @@ function buildReport(){const d=S.settings.selDay,sheets=[],stamp='مولّد م�
     W.set(1,1,'تقرير القسم — '+dept,'title');
     W.set(2,1,'الفترة: '+iso(f0)+' إلى '+iso(t0),'note');
     W.set(3,1,'عدد مراكز العمل','bold').set(3,2,dg.wcs.size,'num2');
+
     let row=5;
     const ordered=[...dg.wcs.entries()].sort((a,b)=>a[1].wc.localeCompare(b[1].wc,'ar'));
+    const allProducts=[];
+    
+    // أولاً: ملخص التشغيل يظل منفصلاً لكل مركز عمل
     for(const [key,g] of ordered){
       let recs;
+    
       if(g.isFridgeAggregate){
         const daily=new Map();
-        for(const x of R.recs.filter(x=>deptOfN(K.norm(x.wc))===dept&&x.day>=f0&&x.day<=t0)){
+    
+        for(const x of R.recs.filter(x=>
+          deptOfN(K.norm(x.wc))===dept &&
+          x.day>=f0 && x.day<=t0
+        )){
           let a=daily.get(x.day);
-          if(!a)daily.set(x.day,a={day:x.day,plan:0,run:0,ideal:0,qty:0,cap:0});
-          ['plan','run','ideal','qty','cap'].forEach(k=>a[k]+=(+x[k]||0));
+    
+          if(!a)daily.set(x.day,a={
+            day:x.day,plan:0,run:0,ideal:0,qty:0,cap:0
+          });
+    
+          ['plan','run','ideal','qty','cap'].forEach(k=>
+            a[k]+=(+x[k]||0)
+          );
         }
+    
         recs=[...daily.values()].sort((a,b)=>a.day-b.day);
+    
       }else{
-        recs=R.recs.filter(x=>K.norm(x.wc)===key&&x.day>=f0&&x.day<=t0);
+        recs=R.recs.filter(x=>
+          K.norm(x.wc)===key &&
+          x.day>=f0 && x.day<=t0
+        );
       }
-      if(!recs.length&&!g.products.length)continue;
-      W.set(row,1,'مركز العمل: '+g.wc,'title');row++;
-      W.set(row,1,'عدد المنتجات المسجلة','bold').set(row,2,g.products.length,'num2');row+=2;
-      const h=['التاريخ','وقت مخطط (دقيقة)','وقت تشغيل (دقيقة)','زمن مثالي (دقيقة)','الإنتاج الفعلي','الطاقة القصوى'];
+    
+      if(!recs.length && !g.products.length)continue;
+    
+      // تجميع أصناف كل المراكز في قائمة واحدة
+      g.products.forEach(x=>{
+        allProducts.push({
+          day:x.day,
+          dept:dept,
+          wc:g.isFridgeAggregate ? g.wc : x.wc,
+          prod:x.prod,
+          cyc:x.cyc,
+          qty:x.qty,
+          hrs:x.hrs
+        });
+      });
+    
+      // عنوان مركز العمل
+      W.set(row,1,'مركز العمل: '+g.wc,'title');
+      row++;
+    
+      W.set(row,1,'عدد المنتجات المسجلة','bold')
+       .set(row,2,g.products.length,'num2');
+    
+      row+=2;
+    
+      // جدول ملخص التشغيل اليومي
+      const h=[
+        'التاريخ',
+        'وقت مخطط (دقيقة)',
+        'وقت تشغيل (دقيقة)',
+        'زمن مثالي (دقيقة)',
+        'الإنتاج الفعلي',
+        'الطاقة القصوى'
+      ];
+    
       h.forEach((v,i)=>W.set(row,i+1,v,'hdr'));
-      recs.forEach((x,i)=>[x.day,x.plan,x.run,x.ideal,x.qty,x.cap].forEach((v,j)=>W.set(row+1+i,j+1,v==null?'':v,j===0?'date':'num1')));
-      row+=Math.max(recs.length,1)+2;
-      W.set(row,1,'تفاصيل المنتجات — '+g.wc,'bold');row++;
-      const ph=['التاريخ','القسم','مركز العمل','اسم المنتج','زمن الدورة (ثانية)','الكمية','ساعات العمل'];
-      ph.forEach((v,i)=>W.set(row,i+1,v,'hdr'));
-      const productHeader=row;
-      g.products.forEach((x,i)=>[x.day,dept,g.isFridgeAggregate?g.wc:x.wc,x.prod,x.cyc,x.qty,x.hrs].forEach((v,j)=>W.set(row+1+i,j+1,v==null?'':v,j===0?'date':(j>=4?'num1':'txt'))));
-      if(g.products.length)W.filter=`A${productHeader}:G${productHeader+g.products.length}`;
-      row+=Math.max(g.products.length,1)+3;
+    
+      recs.forEach((x,i)=>
+        [x.day,x.plan,x.run,x.ideal,x.qty,x.cap].forEach((v,j)=>
+          W.set(
+            row+1+i,
+            j+1,
+            v==null?'':v,
+            j===0?'date':'num1'
+          )
+        )
+      );
+    
+      row+=Math.max(recs.length,1)+3;
     }
+    
+    // ثانياً: جدول أصناف واحد موحد للقسم كله
+    W.set(row,1,'تفاصيل جميع أصناف القسم','title');
+    row++;
+    
+    const ph=[
+      'التاريخ',
+      'القسم',
+      'مركز العمل',
+      'اسم المنتج',
+      'زمن الدورة (ثانية)',
+      'الكمية',
+      'ساعات العمل'
+    ];
+    
+    ph.forEach((v,i)=>W.set(row,i+1,v,'hdr'));
+    
+    const productHeader=row;
+    
+    // جميع الأصناف في جدول واحد
+    allProducts.forEach((x,i)=>{
+      [
+        x.day,
+        x.dept,
+        x.wc,
+        x.prod,
+        x.cyc,
+        x.qty,
+        x.hrs
+      ].forEach((v,j)=>{
+        W.set(
+          productHeader+1+i,
+          j+1,
+          v==null?'':v,
+          j===0?'date':(j>=4?'num1':'txt')
+        );
+      });
+    });
+    
+    // فلتر واحد على الجدول الموحد بالكامل
+    if(allProducts.length){
+      W.filter=`A${productHeader}:G${productHeader+allProducts.length}`;
+    }
+
     sheets.push(W);
   }
   return sheets;}
