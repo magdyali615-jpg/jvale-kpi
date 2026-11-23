@@ -1418,24 +1418,14 @@ function buildReport(selectedDepts=null){const d=S.settings.selDay,sheets=[],sta
     
 const W=new Sh(sheetName,{
   rtl:true,
-  widths:[14,23,23,34,19,19,19,18,18,36,20,16,17],
-  freeze:6
+  widths:[14,23,13,34,19,13,13,18,13,36,20,16,17],
+  freeze:3
 });
 
-W.set(1,1,'التقرير الموحد لبيانات الإنتاج ومؤشرات KPI — '+dept,'title');
-W.set(2,1,'الفترة: '+iso(f0)+' إلى '+iso(t0),'note');
-W.set(3,1,'عدد مراكز العمل','bold').set(3,2,dg.wcs.size,'num2');
+const explanation='توضيح حساب الطاقة القصوى: الطاقة القصوى هي أقصى كمية يمكن إنتاجها خلال الوقت المخطط. المعادلة: الطاقة القصوى = (الوقت المخطط بالدقائق × 60) ÷ زمن الدورة المستخدم بالثواني/قطعة. مثال: إذا كان الوقت المخطط 480 دقيقة وزمن الدورة 30 ثانية، فإن الطاقة القصوى = 960 قطعة.';
+W.merge(1,1,1,13,explanation,'note');
+W.heights[1]=38;
 
-W.set(4,1,
-  'كل صف يمثل صنفاً أو ملخص تشغيل يومي. بيانات التشغيل تظهر مرة واحدة لكل مركز عمل وتاريخ لتجنب تكرارها عند حساب المؤشرات.',
-  'note'
-);
-   W.merge(5,1,5,13,
-  'توضيح حساب الطاقة القصوى: الطاقة القصوى هي أقصى كمية يمكن إنتاجها خلال الوقت المخطط. المعادلة: الطاقة القصوى = (الوقت المخطط بالدقائق × 60) ÷ زمن الدورة المستخدم بالثواني/قطعة. مثال: إذا كان الوقت المخطط 480 دقيقة وزمن الدورة 30 ثانية، فإن الطاقة القصوى = 960 قطعة.',
-  'note'
-);
-
-// عناوين الجدول الموحد
 const headers=[
   'التاريخ',
   'نوع السجل',
@@ -1451,166 +1441,77 @@ const headers=[
   'الكمية',
   'ساعات العمل'
 ];
+headers.forEach((v,i)=>W.set(2,i+1,v,'hdr'));
+W.heights[2]=34;
 
-const headerRow=6;
-headers.forEach((v,i)=>W.set(headerRow,i+1,v,'hdr'));
-W.heights[headerRow]=42;
+let row=3;
+const deptRecords=R.recs
+  .filter(x=>x.dept===dept && x.day>=f0 && x.day<=t0)
+  .slice()
+  .sort((a,b)=>String(a.wc).localeCompare(String(b.wc),'ar') || a.day-b.day);
 
-let row=headerRow+1;
+for(const rec of deptRecords){
+  const raw=S.data.filter(x=>
+    !(x.x&&x.x.draft) &&
+    K.norm(x.wc)===K.norm(rec.wc) &&
+    x.day===rec.day
+  );
+  const products=raw.filter(x=>!isStop(x)&&K.norm(x.prod));
 
-const ordered=[...dg.wcs.entries()].sort(
-  (a,b)=>a[1].wc.localeCompare(b[1].wc,'ar')
-);
-
-for(const [key,g] of ordered){
-
-  let recs=[];
-
-  // تجميع تشغيل الثلاجات كمركز عمل واحد
-  if(g.isFridgeAggregate){
-
-    const daily=new Map();
-
-    for(const x of R.recs.filter(x=>
-      deptOfN(K.norm(x.wc))===dept &&
-      x.day>=f0 && x.day<=t0
-    )){
-      let a=daily.get(x.day);
-
-      if(!a){
-        a={
-          day:x.day,
-          plan:0,
-          run:0,
-          ideal:0,
-          qty:0,
-          cap:0
-        };
-        daily.set(x.day,a);
-      }
-
-      ['plan','run','ideal','qty','cap'].forEach(k=>{
-        a[k]+=(+x[k]||0);
-      });
-    }
-
-    recs=[...daily.values()];
-
-  }else{
-
-    recs=R.recs.filter(x=>
-      K.norm(x.wc)===key &&
-      x.day>=f0 &&
-      x.day<=t0
-    );
-
-  }
-
-  // خريطة ملخص التشغيل حسب التاريخ
-  const dailyMap=new Map();
-  recs.forEach(x=>dailyMap.set(x.day,x));
-
-  // تجميع الأصناف حسب التاريخ
-  const productsByDay=new Map();
-
-  for(const x of g.products){
-    if(!productsByDay.has(x.day)){
-      productsByDay.set(x.day,[]);
-    }
-    productsByDay.get(x.day).push(x);
-  }
-
-  const allDays=[...new Set([
-    ...dailyMap.keys(),
-    ...productsByDay.keys()
-  ])].sort((a,b)=>a-b);
-
-  for(const day of allDays){
-
-    const summary=dailyMap.get(day);
-    const products=(productsByDay.get(day)||[]).slice().sort(
-      (a,b)=>String(a.prod||'').localeCompare(String(b.prod||''),'ar')
-    );
-
-    // لو اليوم فيه أصناف: ندمج بيانات التشغيل مع أول صنف
-    if(products.length){
-
-      products.forEach((x,index)=>{
-
-        const first=index===0;
-
-        const values=[
-          day,
-          first?'تشغيل + صنف':'تفاصيل صنف',
-          dept,
-          g.isFridgeAggregate?g.wc:x.wc,
-
-          // بيانات التشغيل تظهر مرة واحدة فقط
-          first&&summary?summary.plan:'',
-          first&&summary?summary.run:'',
-          first&&summary?summary.ideal:'',
-          first&&summary?summary.qty:'',
-          first&&summary?summary.cap:'',
-
-          x.prod,
-          x.cyc,
-          x.qty,
-          x.hrs
-        ];
-
-        values.forEach((v,j)=>{
-
-          let style='txt';
-
-          if(j===0)style='date';
-          else if(j>=4 && j<=8)style='num1';
-          else if(j>=10)style='num1';
-
-          W.set(row,j+1,v==null?'':v,style);
-
-        });
-
-        row++;
-      });
-
-    }else{
-
-      // يوم فيه تشغيل بدون أصناف مسجلة
+  if(products.length){
+    products.forEach((x,index)=>{
+      const first=index===0;
       const values=[
-        day,
-        'ملخص تشغيل يومي',
+        rec.day,
+        first?'تشغيل + صنف':'تفاصيل صنف',
         dept,
-        g.wc,
-        summary?summary.plan:'',
-        summary?summary.run:'',
-        summary?summary.ideal:'',
-        summary?summary.qty:'',
-        summary?summary.cap:'',
-        '',
-        '',
-        '',
-        ''
+        rec.wc,
+        first?rec.plan:'',
+        first?rec.run:'',
+        first?rec.ideal:'',
+        first?rec.qty:'',
+        first?rec.cap:'',
+        x.prod,
+        x.cyc,
+        x.qty,
+        x.hrs
       ];
-
       values.forEach((v,j)=>{
         let style='txt';
-
         if(j===0)style='date';
-        else if(j>=4 && j<=8)style='num1';
-
+        else if(j>=4&&j<=8)style='num1';
+        else if(j>=10)style='num1';
         W.set(row,j+1,v==null?'':v,style);
       });
-
       row++;
-    }
+    });
+  }else{
+    const values=[
+      rec.day,
+      'متوقف',
+      dept,
+      rec.wc,
+      rec.plan,
+      rec.run,
+      rec.ideal,
+      rec.qty,
+      rec.cap,
+      '',
+      '',
+      '',
+      ''
+    ];
+    values.forEach((v,j)=>{
+      let style='txt';
+      if(j===0)style='date';
+      else if(j>=4&&j<=8)style='num1';
+      W.set(row,j+1,v==null?'':v,style);
+    });
+    row++;
   }
 }
 
-// فلتر واحد على التقرير بالكامل
-if(row>headerRow+1){
-  W.filter=`A${headerRow}:M${row-1}`;
-}
-
+W.filter=`A2:M${Math.max(2,row-1)}`;
 sheets.push(W);
 
   }
