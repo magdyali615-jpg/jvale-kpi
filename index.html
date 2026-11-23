@@ -172,7 +172,7 @@ td.rsn{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap
 @media(max-width:1099px){#sbt{display:none}}
 .psug{position:fixed;z-index:300;display:none;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 34px rgba(0,0,0,.28);overflow:auto;padding:4px}
 .psh{font-size:12px;color:var(--mut);padding:6px 10px 3px}.psi{padding:7px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:baseline;gap:14px}.psi small{color:var(--mut);white-space:nowrap;font-size:11.5px}.psi.on,.psi:hover{background:rgba(28,111,181,.16)}
-\n/* زر تصدير التقرير المجمع — تمييز واضح دون تغيير بقية الأزرار */\n#xr.excel-export{height:40px;padding:0 20px;border:1px solid #0d6848;background:linear-gradient(135deg,#16865c,#0d6848);color:#fff;font-weight:800;font-size:13.5px;letter-spacing:.1px;border-radius:11px;box-shadow:0 4px 12px rgba(13,104,72,.28),inset 0 1px 0 rgba(255,255,255,.2);position:relative}\n#xr.excel-export:hover{background:linear-gradient(135deg,#1b9a6a,#117653);border-color:#0a573d;box-shadow:0 6px 16px rgba(13,104,72,.36);transform:translateY(-1px)}\n#xr.excel-export:focus-visible{outline:3px solid rgba(22,134,92,.28);outline-offset:3px}\n@media(max-width:700px){#xr.excel-export{height:34px;padding:0 12px;font-size:12px}}\n</style></head><body>
+\n/* زر تصدير التقرير المجمع — تمييز واضح دون تغيير بقية الأزرار */\n#xr.excel-export{height:40px;padding:0 20px;border:1px solid #0d6848;background:linear-gradient(135deg,#16865c,#0d6848);color:#fff;font-weight:800;font-size:13.5px;letter-spacing:.1px;border-radius:11px;box-shadow:0 4px 12px rgba(13,104,72,.28),inset 0 1px 0 rgba(255,255,255,.2);position:relative}\n#xr.excel-export:hover{background:linear-gradient(135deg,#1b9a6a,#117653);border-color:#0a573d;box-shadow:0 6px 16px rgba(13,104,72,.36);transform:translateY(-1px)}\n#xr.excel-export:focus-visible{outline:3px solid rgba(22,134,92,.28);outline-offset:3px}\n@media(max-width:700px){#xr.excel-export{height:34px;padding:0 12px;font-size:12px}}\n</style><style id="pexp-css">.pxbox{max-width:460px}.pxlist{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin:8px 0 12px;max-height:46vh;overflow:auto;padding:10px 12px;border:1px solid var(--line);border-radius:10px}.pxrow{display:flex;align-items:center;gap:8px;cursor:pointer;line-height:1.7}.pxall{padding:8px 12px;border-radius:10px;background:var(--soft);margin-bottom:4px}.pxsum{margin:0 0 14px;font-size:13px}.pxbox [data-ok]:disabled{opacity:.5;cursor:not-allowed}@media(max-width:520px){.pxlist{grid-template-columns:1fr}}</style></head><body>
 <header><h1><span class="brand">Jvale</span><span class="sep">|</span>قسم الإنتاج<small>منظومة متابعة مؤشرات الأداء الصناعي (OEE)</small></h1><label class="btn">فتح ملف<input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv,.json" hidden></label><button id="xr" class="excel-export" title="تنزيل التقرير المجمع Excel بكل الأقسام ومراكز العمل والمنتجات">⬇ تصدير التقرير المجمع Excel</button><span id="savest" class="pill ok"></span><button id="bk" title="حفظ في ملف على جهازك (يُحدَّد المكان مرة واحدة ثم يتم الحفظ تلقائيًا)">حفظ الآن</button><button id="rs">استعادة الإعدادات الأولية</button></header>
 <div id="tabs"></div><main id="view"></main><div id="toasts"></div>
 <script>/*! xlsx.js (C) 2013-present SheetJS -- http://sheetjs.com */
@@ -366,19 +366,19 @@ function mtCalc(method){const mt=R.monthTable(),avg=method==='avg',ach=MT.basis=
   return {avg,ach:ach&&avg,depts,plant,plantV,per:iso(S.settings.monthStart).slice(0,7),
     note:avg?'قيمة كل قسم = مجموع الأرقام اليومية (البسط) ÷ مجموع المقامات اليومية لأيام الشهر — كما تُدخلها في جدول البوابة اليومي — وإجمالي المصنع = متوسط قيم الأقسام (كل قسم بنفس الوزن، من غير ترجيح بالكمية أو الزمن).'+(ach?' المعروض هنا متوسط نسب الإنجاز (القيمة ÷ المستهدف).':''):'قيمة كل قسم وإجمالي المصنع = مجموع البسط ÷ مجموع المقام لكل الشهر (طريقة الإكسل). مراكز العمل المعلّمة «خارج المؤشرات» غير داخلة هنا.'};}
 /* ---------- export: source workbook for uploading each department's daily table to the management portal ---------- */
-function buildPortalWb(){const per=iso(S.settings.monthStart).slice(0,7),r1=v=>Math.round((+v||0)*10)/10,wb=XLSX.utils.book_new();wb.Workbook={Views:[{RTL:true}]};
+function buildPortalWb(sel,withSum){const pick=n=>!sel||sel.has(n),wantSum=withSum!==false;const per=iso(S.settings.monthStart).slice(0,7),r1=v=>Math.round((+v||0)*10)/10,wb=XLSX.utils.book_new();wb.Workbook={Views:[{RTL:true}]};
   const byDept=new Map(),cnt=new Map();
   R.log.forEach(r=>{if(!(r.plan>0))return;let a=byDept.get(r.dept);if(!a)byDept.set(r.dept,a=[]);a.push(r);});
   R.recs.forEach(r=>{if(!(r.plan>0)||r.noKpi)return;const k=r.dept+'|'+r.day;let c=cnt.get(k);if(!c)cnt.set(k,c={n:0,au:0});c.n++;if(r.auto)c.au++;});
   const C=mtCalc('avg'),P=C.plantV,pc=v=>v==null?'':r1(v*100);
   const sum=[['ملف رفع مؤشرات الأداء إلى البوابة — شهر '+per],['القيم محسوبة بنفس طريقة البوابة: القسم = مجموع البسط ÷ مجموع المقام لأيام الشهر، وإجمالي المصنع = متوسط الأقسام.'],[],['القسم','أيام محسوبة','استغلال الطاقة %','الأداء %','التوافر %']];
-  C.depts.forEach(d=>{if(byDept.has(d.dept))sum.push([d.dept,d.n,pc(d.u),pc(d.p),pc(d.a)]);});
+  C.depts.forEach(d=>{if(byDept.has(d.dept)&&pick(d.dept))sum.push([d.dept,d.n,pc(d.u),pc(d.p),pc(d.a)]);});
   sum.push(['إجمالي المصنع (متوسط '+P.n+' قسم)','',pc(P.u),pc(P.p),pc(P.a)],[],
     ['طريقة الرفع'],['1) افتح المؤشر في البوابة ثم «جدول الإدخال اليومي» واختر نفس الشهر.'],['2) من ورقة القسم انسخ عمودي البسط والمقام لكل مؤشر (الأعمدة الملوّنة بعناوين المؤشر) والصقهما في جدول البوابة.'],
     ['3) الأعمدة الثلاثة المسماة (%) للمراجعة فقط ولا تُرفع. والجودة تُحسب في البوابة من نماذج الفحص ولا تُرفع من هنا.'],['4) الأيام غير المدرجة في ورقة القسم لا تُدخل في البوابة (أيام بلا تسجيل ولا توقف محسوب).']);
-  const ws0=XLSX.utils.aoa_to_sheet(sum);ws0['!cols']=[{wch:34},{wch:14},{wch:18},{wch:14},{wch:14}];XLSX.utils.book_append_sheet(wb,ws0,'ملخص الشهر');
-  const used=new Set(['ملخص الشهر']);
-  C.depts.forEach(d=>{const rows=(byDept.get(d.dept)||[]).slice().sort((a,b)=>a.day-b.day);if(!rows.length)return;
+  if(wantSum){const ws0=XLSX.utils.aoa_to_sheet(sum);ws0['!cols']=[{wch:34},{wch:14},{wch:18},{wch:14},{wch:14}];XLSX.utils.book_append_sheet(wb,ws0,'ملخص الشهر');}
+  const used=new Set(wantSum?['ملخص الشهر']:[]);
+  C.depts.forEach(d=>{if(!pick(d.dept))return;const rows=(byDept.get(d.dept)||[]).slice().sort((a,b)=>a.day-b.day);if(!rows.length)return;
     const aoa=[[d.dept+' — شهر '+per],['', 'استغلال الطاقة الإنتاجية (CAPU-PRODUCTION)','','', 'الأداء في OEE (OEEP-PRODUCTION)','','', 'التوافر في OEE (OEEA-PRODUCTION)','','',''],
       ['التاريخ','حجم الإنتاج الفعلي (بوحدة القسم)','الطاقة الإنتاجية القصوى (بالوحدة نفسها)','استغلال %','الزمن المثالي للإنتاج الفعلي (دقيقة)','زمن التشغيل الفعلي (دقيقة)','أداء %','زمن التشغيل الفعلي (دقيقة)','زمن الإنتاج المخطط (دقيقة)','توافر %','ملاحظات اليوم']];
     const ws=XLSX.utils.aoa_to_sheet(aoa),first=4,last=first+rows.length-1;
@@ -398,9 +398,37 @@ function buildPortalWb(){const per=iso(S.settings.monthStart).slice(0,7),r1=v=>M
     ws['!merges']=[{s:{r:1,c:1},e:{r:1,c:3}},{s:{r:1,c:4},e:{r:1,c:6}},{s:{r:1,c:7},e:{r:1,c:9}}];
     let nm=d.dept.replace(/[\\\/?*\[\]:]/g,'').slice(0,31)||'قسم',k=2;while(used.has(nm))nm=nm.slice(0,28)+' '+(k++);used.add(nm);XLSX.utils.book_append_sheet(wb,ws,nm);});
   return wb;}
-function exportPortal(){if(!R.validDays.length){toast('لا توجد بيانات في الشهر المحدد','warn');return;}saveXlsx(buildPortalWb(),'KPI_Portal_Upload_'+iso(S.settings.monthStart).slice(0,7)+'.xlsx');}
+/* departments that will actually get a sheet (have planned-time rows in the selected month) */
+function portalDepts(){const has=new Set();R.log.forEach(r=>{if(r.plan>0)has.add(r.dept);});return mtCalc('avg').depts.map(d=>d.dept).filter(n=>has.has(n));}
+/* dialog: choose one / several / all departments -> resolves {sel:Set,all:bool,sum:bool} or null */
+function pickPortalDepts(list,per){return new Promise(res=>{
+  const o=document.createElement('div');o.className='modal';
+  o.innerHTML=`<div class="mbox pxbox" role="dialog" aria-modal="true"><p><b>ملف الرفع للبوابة — شهر ${esc(per)}</b><br><span class="muted">اختر القسم (أو الأقسام) المطلوب تنزيل شيتها</span></p>
+  <label class="pxrow pxall"><input type="checkbox" data-all> <b>كل الأقسام</b> <span class="muted">(${list.length} شيت — شيت لكل قسم)</span></label>
+  <div class="pxlist">${list.map((n,i)=>`<label class="pxrow"><input type="checkbox" data-d="${i}"> ${esc(n)}</label>`).join('')}</div>
+  <label class="pxrow pxsum"><input type="checkbox" data-sum> إضافة ورقة «ملخص الشهر» (اختياري)</label>
+  <div class="row"><button class="pri" data-ok type="button"></button><button data-no type="button">إلغاء</button></div></div>`;
+  const boxes=$$('[data-d]',o),all=$('[data-all]',o),sum=$('[data-sum]',o),ok=$('[data-ok]',o);
+  const sync=()=>{const n=boxes.filter(b=>b.checked).length;all.checked=n>0&&n===boxes.length;all.indeterminate=n>0&&n<boxes.length;ok.disabled=!n;
+    ok.textContent=!n?'اختر قسمًا':n===boxes.length?'تنزيل كل الأقسام ('+n+' شيت)':n===1?'تنزيل القسم المختار':'تنزيل '+n+' أقسام';};
+  const kd=e=>{if(e.key==='Escape')done(null);};
+  const done=v=>{document.removeEventListener('keydown',kd);o.remove();res(v);};
+  all.onchange=()=>{boxes.forEach(b=>b.checked=all.checked);sync();};
+  boxes.forEach(b=>b.onchange=sync);
+  document.addEventListener('keydown',kd);
+  o.onclick=e=>{if(e.target===o)done(null);};
+  $('[data-no]',o).onclick=()=>done(null);
+  ok.onclick=()=>done({sel:new Set(boxes.filter(b=>b.checked).map(b=>list[+b.dataset.d])),all:boxes.every(b=>b.checked),sum:sum.checked});
+  document.body.appendChild(o);sync();if(boxes[0])boxes[0].focus();});}
+async function exportPortal(){if(!R.validDays.length){toast('لا توجد بيانات في الشهر المحدد','warn');return;}
+  const list=portalDepts();if(!list.length){toast('لا توجد أقسام لها بيانات في هذا الشهر','warn');return;}
+  const per=iso(S.settings.monthStart).slice(0,7),c=await pickPortalDepts(list,per);if(!c)return;
+  const safe=s=>String(s).replace(/[\\\/:*?"<>|]/g,'').trim()||'dept';
+  const nm=c.all?'KPI_Portal_Upload_'+per:c.sel.size===1?'KPI_Portal_'+safe([...c.sel][0])+'_'+per:'KPI_Portal_Upload_'+per+'_'+c.sel.size+'_depts';
+  saveXlsx(buildPortalWb(c.sel,c.sum),nm+'.xlsx');
+  toast('✔ تم تنزيل '+(c.all?'كل الأقسام ('+c.sel.size+' شيت)':c.sel.size===1?'شيت القسم: '+[...c.sel][0]:c.sel.size+' أقسام'));}
 function viewMonth(){if(!R.validDays.length)return '';return `<div class="card hotc"><h3>② مؤشرات الشهر — إجمالي المصنع وكل قسم وكل مركز عمل</h3>
-  <div class="row"><label>طريقة الحساب</label><select id="mtm"><option value="avg">وفق البوابة: القسم = مجموع÷مجموع، والمصنع = متوسط الأقسام</option><option value="ratio">مجموع ÷ مجموع للمصنع كله (وفق الإكسل)</option></select><label>يُحسب متوسط الأقسام من</label><select id="mtb"><option value="val">القيم الفعلية للأقسام</option><option value="ach">نسب إنجاز الأقسام (القيمة ÷ المستهدف)</option></select><button id="mtc1" type="button">نسخ إجمالي المصنع</button><button id="mtc2" type="button">نسخ الأقسام</button><button id="mtc3" type="button">نسخ كل مراكز العمل</button><button id="mtxp" type="button" class="pri">ملف الرفع للبوابة (Excel)</button><button id="mtfo" type="button">طيّ الأقسام</button><button id="mtun" type="button">فتح الأقسام</button></div>
+  <div class="row"><label>طريقة الحساب</label><select id="mtm"><option value="avg">وفق البوابة: القسم = مجموع÷مجموع، والمصنع = متوسط الأقسام</option><option value="ratio">مجموع ÷ مجموع للمصنع كله (وفق الإكسل)</option></select><label>يُحسب متوسط الأقسام من</label><select id="mtb"><option value="val">القيم الفعلية للأقسام</option><option value="ach">نسب إنجاز الأقسام (القيمة ÷ المستهدف)</option></select><button id="mtc1" type="button">نسخ إجمالي المصنع</button><button id="mtc2" type="button">نسخ الأقسام</button><button id="mtc3" type="button">نسخ كل مراكز العمل</button><button id="mtxp" type="button" class="pri" title="اختر قسمًا أو أكثر أو كل الأقسام ثم نزّل شيتاتها">ملف الرفع للبوابة (Excel) ▾</button><button id="mtfo" type="button">طيّ الأقسام</button><button id="mtun" type="button">فتح الأقسام</button></div>
   <p class="muted" id="mtnote"></p><div id="mtbox"></div></div>`;}
 function drawMonth(){const box=$('#mtbox');if(!box)return;const C=mtCalc(MT.method),pc1=v=>v==null?'':(Math.round(v*1000)/10).toFixed(1);$('#mtnote').textContent=C.note;$('#mtb').disabled=!C.avg;
   const IND=[['u','استغلال الطاقة الإنتاجية للأقسام الإنتاجية',.85,'حجم الإنتاج الفعلي','الطاقة الإنتاجية القصوى'],['p','الأداء في OEE للأقسام الإنتاجية',1,'الزمن المثالي للإنتاج الفعلي (دقيقة)','زمن التشغيل الفعلي (دقيقة)'],['a','التوافر في OEE للأقسام الإنتاجية',1,'زمن التشغيل الفعلي (دقيقة)','زمن الإنتاج المخطط (دقيقة)']];
