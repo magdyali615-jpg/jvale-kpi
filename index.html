@@ -1515,7 +1515,59 @@ W.filter=`A2:M${Math.max(2,row-1)}`;
 sheets.push(W);
 
   }
-  // عند تحديد قسم/أقسام من النافذة، يكون الملف مخصصًا لشيتات الأقسام فقط.
+  // عند تصدير قسم منفرد: أضف مؤشرات هذا القسم اليومية وملخصه الشهري
+  // مع إظهار بسط ومقام كل مؤشر حتى تكون طريقة الحساب واضحة وقابلة للمراجعة.
+  if(Array.isArray(selectedDepts)){
+    for(const dept of selectedDepts){
+      const daily=R.log.filter(x=>x.dept===dept);
+      const D=new Sh('المؤشرات اليومية',{rtl:true,widths:[14,22,16,16,13,17,17,13,17,17,13],freeze:5});
+      D.set(1,1,'المؤشرات اليومية — '+dept,'title');
+      D.set(2,1,stamp+' — مكونات الحساب اليومي','note');
+      D.set(3,1,'عدد الأيام المعروضة','bold').set(3,2,daily.length,'inNum');
+      D.merge(4,1,5,1,'التاريخ','hdr');
+      D.merge(4,2,4,4,'استغلال الطاقة الإنتاجية','hdr');
+      D.merge(4,5,4,7,'الأداء في OEE','hdr');
+      D.merge(4,8,4,10,'التوافر في OEE','hdr');
+      D.set(5,2,'الإنتاج الفعلي (البسط)','sub').set(5,3,'الطاقة القصوى (المقام)','sub').set(5,4,'%','sub');
+      D.set(5,5,'الزمن المثالي (البسط)','sub').set(5,6,'زمن التشغيل (المقام)','sub').set(5,7,'%','sub');
+      D.set(5,8,'زمن التشغيل (البسط)','sub').set(5,9,'الزمن المخطط (المقام)','sub').set(5,10,'%','sub');
+      D.merge(4,11,5,11,'أيام محسوبة','hdr');
+      D.heights[5]=48;
+      daily.forEach((x,i)=>{
+        const rr=6+i;
+        D.set(rr,1,x.day,'date');
+        [['qty','num1'],['cap','num1'],['u','pct'],['ideal','num1'],['run','num1'],['p','pct'],['run2','num1'],['plan','num1'],['a','pct']].forEach(([k,st],j)=>D.set(rr,2+j,x[k]==null?'':x[k],st));
+        D.set(rr,11,x.plan>0?1:0,'num2');
+      });
+      D.filter=`A5:K${5+daily.length}`;
+      sheets.push(D);
+
+      const totals=daily.reduce((a,x)=>{
+        a.qty+=+x.qty||0; a.cap+=+x.cap||0; a.ideal+=+x.ideal||0;
+        a.run+=+x.run||0; a.plan+=+x.plan||0; if(x.plan>0)a.days++;
+        return a;
+      },{qty:0,cap:0,ideal:0,run:0,plan:0,days:0});
+      const pct=(n,d)=>d>0?n/d:null;
+      const M=new Sh('ملخص الشهر',{rtl:true,widths:[34,22,22,18],freeze:4});
+      M.set(1,1,'ملخص مؤشرات الشهر — '+dept,'title');
+      M.set(2,1,stamp+' — طريقة الحساب: مجموع البسط ÷ مجموع المقام للأيام المحسوبة','note');
+      M.set(3,1,'عدد الأيام المحسوبة','bold').set(3,2,totals.days,'inNum');
+      ['المؤشر','البسط (مجموع الشهر)','المقام (مجموع الشهر)','نتيجة الشهر'].forEach((v,i)=>M.set(5,1+i,v,'hdr'));
+      const metrics=[
+        ['استغلال الطاقة الإنتاجية',totals.qty,totals.cap,pct(totals.qty,totals.cap)],
+        ['الأداء في OEE',totals.ideal,totals.run,pct(totals.ideal,totals.run)],
+        ['التوافر في OEE',totals.run,totals.plan,pct(totals.run,totals.plan)]
+      ];
+      metrics.forEach((x,i)=>{const rr=6+i;M.set(rr,1,x[0],'bold').set(rr,2,x[1],'num1').set(rr,3,x[2],'num1').set(rr,4,x[3]==null?'':x[3],'pct');});
+      M.set(11,1,'معادلات الحساب','hdr');
+      M.merge(12,1,12,4,'استغلال الطاقة = مجموع الإنتاج الفعلي ÷ مجموع الطاقة القصوى','note');
+      M.merge(13,1,13,4,'الأداء = مجموع الزمن المثالي للإنتاج الفعلي ÷ مجموع زمن التشغيل الفعلي','note');
+      M.merge(14,1,14,4,'التوافر = مجموع زمن التشغيل الفعلي ÷ مجموع زمن الإنتاج المخطط','note');
+      M.merge(15,1,15,4,'النسب الشهرية محسوبة من إجمالي البسط وإجمالي المقام، وليست متوسط النسب اليومية.','note');
+      sheets.push(M);
+    }
+  }
+  // عند تحديد قسم/أقسام من النافذة، يكون الملف مخصصًا للقسم ومؤشراته فقط.
   return Array.isArray(selectedDepts)?sheets.slice(5):sheets;}
 function pickReportDepts(list){return new Promise(resolve=>{
   const o=document.createElement('div');o.className='modal';
