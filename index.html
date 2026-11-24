@@ -172,7 +172,42 @@ td.rsn{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap
 @media(max-width:1099px){#sbt{display:none}}
 .psug{position:fixed;z-index:300;display:none;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 34px rgba(0,0,0,.28);overflow:auto;padding:4px}
 .psh{font-size:12px;color:var(--mut);padding:6px 10px 3px}.psi{padding:7px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:baseline;gap:14px}.psi small{color:var(--mut);white-space:nowrap;font-size:11.5px}.psi.on,.psi:hover{background:rgba(28,111,181,.16)}
-\n/* زر تصدير التقرير المجمع — تمييز واضح دون تغيير بقية الأزرار */\n#xr.excel-export{height:40px;padding:0 20px;border:1px solid #0d6848;background:linear-gradient(135deg,#16865c,#0d6848);color:#fff;font-weight:800;font-size:13.5px;letter-spacing:.1px;border-radius:11px;box-shadow:0 4px 12px rgba(13,104,72,.28),inset 0 1px 0 rgba(255,255,255,.2);position:relative}\n#xr.excel-export:hover{background:linear-gradient(135deg,#1b9a6a,#117653);border-color:#0a573d;box-shadow:0 6px 16px rgba(13,104,72,.36);transform:translateY(-1px)}\n#xr.excel-export:focus-visible{outline:3px solid rgba(22,134,92,.28);outline-offset:3px}\n@media(max-width:700px){#xr.excel-export{height:34px;padding:0 12px;font-size:12px}}\n</style><style id="pexp-css">.pxbox{max-width:460px}.pxlist{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin:8px 0 12px;max-height:46vh;overflow:auto;padding:10px 12px;border:1px solid var(--line);border-radius:10px}.pxrow{display:flex;align-items:center;gap:8px;cursor:pointer;line-height:1.7}.pxall{padding:8px 12px;border-radius:10px;background:var(--soft);margin-bottom:4px}.pxsum{margin:0 0 14px;font-size:13px}.pxbox [data-ok]:disabled{opacity:.5;cursor:not-allowed}@media(max-width:520px){.pxlist{grid-template-columns:1fr}}</style></head><body>
+\n/* زر تصدير التقرير المجمع — تمييز واضح دون تغيير بقية الأزرار */\n#xr.excel-export{height:40px;padding:0 20px;border:1px solid #0d6848;background:linear-gradient(135deg,#16865c,#0d6848);color:#fff;font-weight:800;font-size:13.5px;letter-spacing:.1px;border-radius:11px;box-shadow:0 4px 12px rgba(13,104,72,.28),inset 0 1px 0 rgba(255,255,255,.2);position:relative}\n#xr.excel-export:hover{background:linear-gradient(135deg,#1b9a6a,#117653);border-color:#0a573d;box-shadow:0 6px 16px rgba(13,104,72,.36);transform:translateY(-1px)}\n#xr.excel-export:focus-visible{outline:3px solid rgba(22,134,92,.28);outline-offset:3px}\n@media(max-width:700px){#xr.excel-export{height:34px;padding:0 12px;font-size:12px}}\n</style><style id="pexp-css">.pxbox{max-width:460px}.pxlist{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin:8px 0 12px;max-height:46vh;overflow:auto;padding:10px 12px;border:1px solid var(--line);border-radius:10px}.pxrow{display:flex;align-items:center;gap:8px;cursor:pointer;line-height:1.7}.pxall{padding:8px 12px;border-radius:10px;background:var(--soft);margin-bottom:4px}.pxsum{margin:0 0 14px;font-size:13px}.pxbox [data-ok]:disabled{opacity:.5;cursor:not-allowed}@media(max-width:520px){.pxlist{grid-template-columns:1fr}}/* ===== ERP layer v3 ===== */
+.tab[data-t=home]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3%2011l9-8%209%208M5%2010v10h14V10'/%3E%3C/svg%3E")}
+#tabs .grp{font-size:11.5px;font-weight:700;color:var(--mut);padding:14px 14px 4px;letter-spacing:.3px;flex:none}
+body.sb.sbc #tabs .grp{font-size:0;padding:6px 0;margin:4px 10px 0;border-top:1px solid var(--line)}
+#tbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--card);border-bottom:1px solid var(--line);padding:9px 28px;position:relative;z-index:4}
+body.sb #tbar{margin-right:228px}body.sb.sbc #tbar{margin-right:62px}
+#tbar .bc{font-size:13px;color:var(--mut);flex:1;min-width:160px}#tbar .bc b{color:var(--ink);font-size:14.5px}
+#tbar button,#tbar .usr{height:32px;border-radius:9px;border:1px solid var(--line);background:var(--soft);color:var(--ink);font:inherit;font-size:13px;padding:0 12px;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+#tbar #pk{min-width:200px;justify-content:space-between;color:var(--mut)}#tbar #pk .kbd{font-size:11px;opacity:.7}
+#tbar .usr{cursor:default}
+#tbar .per{position:relative}
+#tbpop{position:absolute;top:38px;inset-inline-end:0;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:14px;z-index:30;width:360px;display:none}
+#tbpop.on{display:block}#tbpop .row{margin:6px 0}#tbpop .chips{display:flex;flex-wrap:wrap;gap:6px}#tbpop .chips button{height:28px;font-size:12.5px}
+#tbpop button.pri,#tbar button.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+.fm{position:relative;display:inline-block}
+.fmm{display:none;position:absolute;top:40px;inset-inline-end:0;min-width:230px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.35);padding:6px;z-index:40;flex-direction:column;gap:2px}
+.fm.on .fmm{display:flex}
+header .fmm button,header .fmm label.btn{background:transparent!important;color:var(--ink)!important;border:0!important;border-radius:8px;height:36px;width:100%;justify-content:flex-start;padding:0 12px;transform:none!important;backdrop-filter:none}
+header .fmm button:hover,header .fmm label.btn:hover{background:var(--soft)!important}
+header .fmm #rs{color:var(--bad)!important;border-top:1px solid var(--line)!important;border-radius:0 0 8px 8px;margin-top:4px}
+.hm-rings{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin-bottom:18px}
+.hm-k{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;gap:16px;align-items:center;box-shadow:var(--shadow)}
+.ring{--v:0;--c:var(--good);width:92px;height:92px;border-radius:50%;background:conic-gradient(var(--c) calc(var(--v)*1%),var(--soft) 0);display:grid;place-items:center;flex:none}
+.ring::before{content:attr(data-t);width:68px;height:68px;border-radius:50%;background:var(--card);display:grid;place-items:center;font-weight:800;font-size:16px;color:var(--ink)}
+.hm-k.bad .ring{--c:var(--bad)}.hm-k h4{margin:0 0 4px}.hm-k .sub{font-size:12px;color:var(--mut);line-height:1.7}
+.st-up{color:var(--good);font-weight:700;font-size:12px;margin-inline-start:6px}.st-dn{color:var(--bad);font-weight:700;font-size:12px;margin-inline-start:6px}
+.nm{display:block;font-size:11.5px;color:var(--mut);font-weight:400}
+.kt td .nm{text-align:center}
+.hm-al{list-style:none;margin:0;padding:0}.hm-al li{padding:8px 12px;border-radius:8px;background:var(--soft);margin-bottom:6px;font-size:13px}
+.hm-links{display:flex;gap:8px;flex-wrap:wrap}
+.empty-s{text-align:center;padding:34px 10px}.empty-s .ei{font-size:38px;opacity:.6}.empty-s h3{border:0;padding:0;margin:8px 0 4px;font-size:16px}.empty-s p{color:var(--mut);margin:0 0 14px}
+table.kt th.srt{cursor:pointer;user-select:none}table.kt th.srt::after{content:' ⇅';opacity:.5;font-size:11px}table.kt th.srt.asc::after{content:' ▲';opacity:1}table.kt th.srt.desc::after{content:' ▼';opacity:1}
+.hotc{padding:12px 16px}.hotc .row{gap:8px 10px}
+@media(max-width:1099px){body.sb #tbar{margin-right:0}#tbar #pk{min-width:0}}
+
+</style></head><body>
 <header><h1><span class="brand">Jvale</span><span class="sep">|</span>قسم الإنتاج<small>منظومة متابعة مؤشرات الأداء الصناعي (OEE)</small></h1><label class="btn">فتح ملف<input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv,.json" hidden></label><button id="xr" class="excel-export" title="اختر قسمًا أو أكثر أو كل الأقسام لتصدير شيت مستقل لكل قسم">⬇ تصدير تقرير الأقسام Excel</button><span id="savest" class="pill ok"></span><button id="bk" title="حفظ في ملف على جهازك (يُحدَّد المكان مرة واحدة ثم يتم الحفظ تلقائيًا)">حفظ الآن</button><button id="rs">استعادة الإعدادات الأولية</button></header>
 <div id="tabs"></div><main id="view"></main><div id="toasts"></div>
 <script>/*! xlsx.js (C) 2013-present SheetJS -- http://sheetjs.com */
@@ -312,7 +347,7 @@ const cls=(v,t)=>v==null?'':(v>=t-1e-9?'good':'bad');
 const COLS=[['qty','حجم الإنتاج الفعلي (كمية)'],['cap','الطاقة القصوى (كمية)'],['u','%'],['ideal','الزمن المثالي (دقيقة)'],['run','زمن التشغيل (دقيقة)'],['p','%'],['run2','زمن التشغيل (دقيقة)'],['plan','الزمن المخطط (دقيقة)'],['a','%']];
 function kpiTable(rows,id){
   let h=`<div class="tw"><table class="kt" id="${id}"><thead><tr><th rowspan="2">القسم</th><th colspan="3">① استغلال الطاقة (الهدف 85%)</th><th colspan="3">② الأداء OEE (الهدف 100%)</th><th colspan="3">③ التوافر OEE (الهدف 100%)</th></tr><tr>${COLS.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>`;
-  for(const r of rows) h+=`<tr><td class="dn">${esc(r.dept)}</td>${COLS.map(([k])=>{const v=r[k];if(k==='u'||k==='p'||k==='a')return `<td class="pct ${cls(v,TGT[k])}">${pc(v)}</td>`;return `<td>${fn(v)}</td>`;}).join('')}</tr>`;
+  for(const r of rows) h+=`<tr><td class="dn">${esc(r.dept)}</td>${COLS.map(([k])=>{const v=r[k];if(k==='u'||k==='p'||k==='a')return `<td class="pct ${cls(v,TGT[k])}">${pc(v)}${v==null?'':(v>=TGT[k]-1e-9?'<span class="st-up">▲ +'+((v-TGT[k])*100).toFixed(1)+'</span>':'<span class="st-dn">▼ '+((v-TGT[k])*100).toFixed(1)+'</span>')}</td>`;return `<td>${fn(v)}</td>`;}).join('')}</tr>`;
   return h+'</tbody></table></div>';
 }
 function tsvRows(rows,keys){return rows.map(r=>keys.map(k=>(k==='u'||k==='p'||k==='a')?pc(r[k]):f1(r[k])).join('\t')).join('\n');}
@@ -1771,6 +1806,72 @@ initThemeAdmin();document.body.classList.add('sb');try{if(localStorage.getItem('
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPalette();}});})();
 let fhT=0;const fhQ=()=>{cancelAnimationFrame(fhT);fhT=requestAnimationFrame(fixHeads);};
 new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});window.addEventListener('resize',fhQ);
+/* ===== ERP layer v3 (modules sidebar, home, top bar, file menu, unified tables) ===== */
+(function(){
+ const ORDER=['home','entry','log','close','kpi','tot','dt','stops','map','set','data','guide'];
+ const GRP={entry:'الإنتاج',kpi:'الأداء',map:'البيانات الأساسية',data:'النظام'};
+ const GN={home:'الرئيسية',entry:'الإنتاج',log:'الإنتاج',close:'الإنتاج',kpi:'الأداء',tot:'الأداء',dt:'الأداء',stops:'الأداء',map:'البيانات الأساسية',set:'البيانات الأساسية',data:'النظام',guide:'النظام'};
+ const nf=v=>v==null?'—':(Math.round(v*10)/10).toLocaleString('en-US',{maximumFractionDigits:1});
+ const stH=(v,t)=>v==null?'':(v>=t-1e-9?`<span class="st-up">▲ +${((v-t)*100).toFixed(1)}</span>`:`<span class="st-dn">▼ ${((v-t)*100).toFixed(1)}</span>`);
+ function viewHome(){
+  const mt=R.monthTable(),sum=k=>mt.reduce((s,r)=>s+(+r[k]||0),0),P=mtCalc('avg').plantV;
+  const defs=[['u','استغلال الطاقة','qty','cap','الكمية الفعلية','الطاقة القصوى'],['p','الأداء OEE','ideal','run','الزمن المثالي','زمن التشغيل'],['a','التوافر OEE','run2','plan','زمن التشغيل','الزمن المخطط']];
+  const rings=defs.map(([k,n,a,b,la,lb])=>{const v=P[k],t=TGT[k],pct=v==null?0:Math.min(100,v*100/(t||1)*(t>=1?1:1));const ok=v!=null&&v>=t-1e-9;
+   return `<div class="hm-k ${ok?'':'bad'}"><div class="ring" style="--v:${v==null?0:Math.min(100,v*100)}" data-t="${v==null?'—':pc(v)}"></div><div><h4>${n}</h4><div class="sub">الهدف ${Math.round(t*100)}% ${stH(v,t)}<br>${la}: <b>${nf(sum(a))}</b><br>${lb}: <b>${nf(sum(b))}</b></div></div></div>`;}).join('');
+  const cell=(r,k,a,b,t)=>`<td class="pct ${cls(r[k],t)}">${pc(r[k])}${stH(r[k],t)}<span class="nm">${nf(r[a])} / ${nf(r[b])}</span></td>`;
+  const tbl=`<div class="tw"><table class="kt"><thead><tr><th>القسم</th><th>استغلال الطاقة (الكمية / الطاقة)</th><th>الأداء (مثالي / تشغيل)</th><th>التوافر (تشغيل / مخطط)</th></tr></thead><tbody>${mt.map(r=>`<tr><td class="dn">${esc(r.dept)}</td>${cell(r,'u','qty','cap',TGT.u)}${cell(r,'p','ideal','run',TGT.p)}${cell(r,'a','run2','plan',TGT.a)}</tr>`).join('')}</tbody></table></div>`;
+  const hs=health(),au=R.autoList.filter(r=>!r.noKpi);
+  const al=[...hs.map(esc),...(au.length?[`⏸ ${au.length} حالة توقف تلقائي (ماكينة غير مسجلة في Data) خلال ${R.pWord}`]:[])];
+  const links=[['entry','تسجيل البيانات'],['kpi','مؤشرات الأداء'],['dt','ساعات التوقف'],['map','مراكز العمل'],['data','استيراد البيانات']].filter(l=>tabAllowed(l[0])).map(l=>`<button data-go="${l[0]}">${l[1]}</button>`).join('');
+  return `<div class="hm-rings">${rings}</div>
+   <div class="card"><h3>الأقسام — ${esc(R.pLabel)} <span class="muted" style="font-weight:400;font-size:12.5px">(الرقم تحت كل نسبة = القيمتان المحسوب منهما)</span></h3>${mt.length?tbl:'<p class="muted">لا توجد بيانات في هذه الفترة.</p>'}</div>
+   <div class="grid2"><div class="card"><h3>تنبيهات</h3>${al.length?`<ul class="hm-al">${al.map(x=>`<li>${x}</li>`).join('')}</ul>`:'<p class="muted">✔ لا توجد تنبيهات</p>'}</div>
+   <div class="card"><h3>اختصارات</h3><div class="hm-links">${links}</div></div></div>`;
+ }
+ function bindHome(){$$('[data-go]').forEach(b=>b.onclick=()=>{tab=b.dataset.go;render();});}
+ TABS.unshift(['home','الرئيسية',viewHome,bindHome]);
+ TABS.sort((a,b)=>ORDER.indexOf(a[0])-ORDER.indexOf(b[0]));
+ tab='home';
+ /* ---- file menu in header ---- */
+ const h=document.querySelector('header');
+ if(h){const fm=document.createElement('div');fm.className='fm';fm.innerHTML='<button id="fmb" type="button">☰ ملف ▾</button><div class="fmm"></div>';const menu=fm.querySelector('.fmm');
+  const keep=new Set(['bk','savest','sbt','pk']);
+  [...h.children].forEach(c=>{if(c.tagName==='H1'||keep.has(c.id))return;menu.appendChild(c);});
+  const pk=h.querySelector('#pk');if(pk)pk.remove();
+  const sbt=h.querySelector('#sbt');h.insertBefore(fm,sbt||null);
+  fm.querySelector('#fmb').onclick=e=>{e.stopPropagation();fm.classList.toggle('on');};
+  document.addEventListener('click',e=>{if(!fm.contains(e.target))fm.classList.remove('on');});
+  menu.addEventListener('click',()=>setTimeout(()=>fm.classList.remove('on'),50));
+  const bk=h.querySelector('#bk');if(bk&&!bk.dataset.l){bk.classList.add('prim');}
+  window.__pkEl=pk;}
+ /* ---- top bar ---- */
+ const tb=document.createElement('div');tb.id='tbar';document.body.insertBefore(tb,document.getElementById('view'));
+ function tbarUpdate(){if(!R)return;const t=TABS.find(x=>x[0]===tab);const g=GN[tab]||'';
+  const un=(()=>{try{return localStorage.getItem('jvale_user_name')||'زائر';}catch(e){return 'زائر';}})();
+  tb.innerHTML=`<div class="bc">${esc(g)} ‹ <b>${esc(t?t[1]:'')}</b></div><span id="tpk"></span><span class="per"><button id="tper" type="button">الفترة: ${esc(iso(R.pFrom))} ← ${esc(iso(R.pTo))}</button><div id="tbpop"></div></span><span class="usr">● ${esc(un)}</span>`;
+  if(window.__pkEl)tb.querySelector('#tpk').replaceWith(window.__pkEl);
+  const pop=tb.querySelector('#tbpop');
+  tb.querySelector('#tper').onclick=e=>{e.stopPropagation();const on=pop.classList.toggle('on');if(on){pop.innerHTML=`<b>فترة التقارير</b><div class="chips row">${kpiChips().map(c=>`<button type="button" data-pc="${c[2]},${c[3]}" class="${c[2]===R.pFrom&&c[3]===R.pTo?'pri':''}">${c[1]}</button>`).join('')}</div><div class="row"><label>من</label><input type="date" id="tpf" value="${iso(R.pFrom)}"><label>إلى</label><input type="date" id="tpt" value="${iso(R.pTo)}"></div><div class="row"><button type="button" class="pri" id="tpa">تطبيق</button><span class="muted">تنطبق على الرئيسية ومؤشرات الأداء والتقارير، ولا علاقة لها بفترة استيراد الملف أو فترة تصدير Excel.</span></div>`;
+    pop.querySelectorAll('[data-pc]').forEach(b=>b.onclick=()=>{const [f,t2]=b.dataset.pc.split(',').map(Number);setPeriod(f,t2);});
+    pop.querySelector('#tpa').onclick=()=>{const f=isoToSer(pop.querySelector('#tpf').value),t2=isoToSer(pop.querySelector('#tpt').value);if(f&&t2)setPeriod(f,t2);};}};
+  pop.onclick=e=>e.stopPropagation();}
+ document.addEventListener('click',()=>{const p=document.getElementById('tbpop');if(p)p.classList.remove('on');});
+ /* ---- sidebar groups + render hook ---- */
+ function decorate(){const box=document.getElementById('tabs');if(!box)return;
+  box.querySelectorAll('.grp').forEach(x=>x.remove());
+  let lg='';box.querySelectorAll('.tab').forEach(b=>{const gk=GN[b.dataset.t];if(gk&&gk!==lg&&b.dataset.t!=='home'){lg=gk;const d=document.createElement('div');d.className='grp';d.textContent=gk;box.insertBefore(d,b);}});
+  tbarUpdate();}
+ const _r=render;render=function(){_r.apply(this,arguments);try{decorate();}catch(e){console.error(e);}};
+ /* ---- unified tables: sortable headers, friendly empty state ---- */
+ let uq=0;function uni(){
+  document.querySelectorAll('table.kt').forEach(t=>{const th=t.tHead;if(!th||th.rows.length!==1||t.dataset.srt)return;t.dataset.srt='1';
+   [...th.rows[0].cells].forEach((c,i)=>{if(!c.textContent.trim())return;c.classList.add('srt');c.onclick=()=>{const asc=!c.classList.contains('asc');th.rows[0].querySelectorAll('th').forEach(x=>x.classList.remove('asc','desc'));c.classList.add(asc?'asc':'desc');
+     const rows=[...t.tBodies[0].rows];const val=r=>{const x=r.cells[i];if(!x)return '';const s=x.textContent.replace(/[,%▲▼\s]/g,'');const n=parseFloat(s);return isNaN(n)?x.textContent.trim():n;};
+     rows.sort((a,b)=>{const x=val(a),y=val(b);const r=(typeof x==='number'&&typeof y==='number')?x-y:String(x).localeCompare(String(y),'ar');return asc?r:-r;});rows.forEach(r=>t.tBodies[0].appendChild(r));};});});
+  document.querySelectorAll('#view > .card').forEach(c=>{if(c.dataset.em)return;const tx=c.textContent.trim();if(c.children.length===0&&/^لا توجد بيانات/.test(tx)&&tx.length<140){c.dataset.em='1';c.innerHTML=`<div class="empty-s"><div class="ei">⌀</div><h3>لا توجد بيانات في هذه الفترة؟</h3><p>${esc(tx)}</p>${tabAllowed('data')?'<button class="pri" data-gd>استيراد البيانات</button>':''}</div>`;const b=c.querySelector('[data-gd]');if(b)b.onclick=()=>{tab='data';render();};}});}
+ new MutationObserver(()=>{cancelAnimationFrame(uq);uq=requestAnimationFrame(uni);}).observe(document.getElementById('view'),{childList:true,subtree:true});
+})();
+
 render();pill();if(HOSTED)cloudInit();else if(GHC)ghInit();else initFile();});
 })();
 </script>
