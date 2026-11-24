@@ -2190,7 +2190,7 @@ new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});w
  function dueOf(o){const d=PL().due[o];return d&&d.date?d.date:'';}
  function viewPlan(){const p=PL(),lines=p.lines,colors=[...new Set(lines.map(l=>l.color).filter(Boolean))].sort(),orders=[...new Set(lines.map(l=>l.order))].sort();
   const up=canEdit()?`<label class="btn pri" style="display:inline-flex;align-items:center;height:36px;padding:0 14px;border-radius:9px;cursor:pointer">رفع ملف الخطة (Excel)<input type="file" id="plF" accept=".xlsx,.xls" style="display:none"></label>`:'<span class="muted">رفع الخطة يحتاج صلاحية إدخال بيانات أو مسؤول.</span>';
-  return `<div id="plPrev">${viewPrev()}</div><div class="card hotc"><h3>الخطة الأسبوعية</h3><div class="row">${up}<span class="muted">${p.files.length?'آخر ملف: '+esc(p.files[p.files.length-1].name)+' — '+new Date(p.files[p.files.length-1].at).toLocaleDateString('en-GB'):'لم يتم رفع خطة بعد'}</span></div>
+  return `<div id="plPrev">${viewPrev()}</div><div class="card hotc"><h3>الخطة الأسبوعية</h3><div class="row">${up}<button type="button" class="pri" id="plImg" style="height:36px">📷 أوردر جديد من صورة</button><span class="muted">${p.files.length?'آخر ملف: '+esc(p.files[p.files.length-1].name)+' — '+new Date(p.files[p.files.length-1].at).toLocaleDateString('en-GB'):'لم يتم رفع خطة بعد'}</span></div>
   <div id="plAl"></div><div id="plSum" class="trk-sum"></div>
   <div class="row"><input id="plq" placeholder="🔍 كود أو اسم صنف أو أوردر أو عميل" style="width:280px" value="${esc(PV.q)}"><label>اللون</label><select id="plc"><option value="">الكل</option>${colors.map(c=>`<option ${c===PV.color?'selected':''}>${esc(c)}</option>`).join('')}</select><label>الحالة</label><select id="pls">${[['','الكل'],['todo','لم يبدأ'],['part','جزئي'],['done','تم'],['over','زيادة عن الخطة'],['open','المتبقي (لم يبدأ + جزئي)']].map(a=>`<option value="${a[0]}" ${a[0]===PV.st?'selected':''}>${a[1]}</option>`).join('')}</select><label>العرض</label><select id="plv"><option value="lines" ${PV.view==='lines'?'selected':''}>سطور</option><option value="orders" ${PV.view==='orders'?'selected':''}>أوردرات</option></select><label>الأوردر</label><select id="plo"><option value="">الكل</option>${orders.map(c=>`<option ${c===PV.order?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
   <div id="plT"></div></div>`;}
@@ -2217,8 +2217,63 @@ new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});w
     Object.assign(p.due,c.due);p.files.push({id:fid,name:PEND.fname,at:now,by:U(),n:c.all.size,nw:c.nw,chg:c.chg});if(p.files.length>30)p.files.splice(0,p.files.length-30);
     const msg=`رفع خطة «${PEND.fname}»: ${c.nw} جديد، ${c.chg} معدّل، ${c.same} بدون تغيير`;if(window.__aud)window.__aud('plan',msg);PEND=null;save();render();toast('✔ '+msg);};};
   bindPrev();
-  $('#pls').onchange=e=>{PV.st=e.target.value;drawPlan();};$('#plv').onchange=e=>{PV.view=e.target.value;drawPlan();};$('#plq').oninput=e=>{PV.q=e.target.value;drawPlan();};$('#plc').onchange=e=>{PV.color=e.target.value;drawPlan();};$('#plo').onchange=e=>{PV.order=e.target.value;drawPlan();};drawPlan();}
+  const pi=$('#plImg');if(pi)pi.onclick=openImg;$('#pls').onchange=e=>{PV.st=e.target.value;drawPlan();};$('#plv').onchange=e=>{PV.view=e.target.value;drawPlan();};$('#plq').oninput=e=>{PV.q=e.target.value;drawPlan();};$('#plc').onchange=e=>{PV.color=e.target.value;drawPlan();};$('#plo').onchange=e=>{PV.order=e.target.value;drawPlan();};drawPlan();}
 
+ /* ---------- stages (e)+(f): order screenshot -> OCR into a mandatory review grid (manual grid is the fallback) ---------- */
+ function loadScript(src){return new Promise((res,rej)=>{if(window.Tesseract)return res();const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('تعذر تحميل مكتبة القراءة (تأكد من الإنترنت)'));document.head.appendChild(s);});}
+ const OCRSRC='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+ function fixLine(t){return t.replace(/[\u200e\u200f\u202a-\u202e]/g,'').replace(/\|/g,' ').replace(/\s+/g,' ').trim();}
+ /* parse recognised text into rows: [code] [product with bracket code] [shortage] [S-order] [client] */
+ function parseOcr(text){const rows=[],bad=[],cnt=new Map();const AR=/[\u0600-\u06FF]/;
+  String(text||'').split(/\n/).map(fixLine).filter(Boolean).forEach(ln=>{
+   const m=/^(\d{2,6})\s+(.+)\s+(-?\s?\d{1,5})\s+([A-Za-z0-9$]{1,8})\s*(.*)$/.exec(ln);
+   if(!m||!/\[[^\]]*\d{3,6}\]/.test(m[2])){if(/\[|\d{4,}/.test(ln)&&!/code-n|product_id/i.test(ln))bad.push(ln);return;}
+   let name=m[2].replace(/[\u200e\u200f\u202a-\u202e]/g,''),qty=Math.abs(parseInt(m[3].replace(/\s/g,''),10)),tok=m[4].replace(/^[$5s]/i,'S'),client=(m[5]||'');
+   if(AR.test(tok)){client=tok+' '+client;tok='';}
+   name=name.replace(/\b([HLDWM]\d{0,4}[O]\d{0,4})\b/g,(x)=>x.replace(/O/g,'0'));
+   const br=/\[([^\]]*?)-(\d{3,6})\]/.exec(name),codeIn=br?br[2]:'',w=[];let code=m[1];
+   if(codeIn&&codeIn!==code){w.push('الكود اتصحح من الاسم ('+code+' ← '+codeIn+')');code=codeIn;}
+   if((name.match(/\[/g)||[]).length!==(name.match(/\]/g)||[]).length||AR.test(name))w.push('الاسم فيه حروف مش واضحة — قارنه بالصورة');
+   const okOrd=/^S\d{5}$/.test(tok);if(okOrd)cnt.set(tok,(cnt.get(tok)||0)+1);
+   rows.push({code,name:name.trim(),q:qty,order:okOrd?tok:'',client:client.replace(/[A-Za-z0-9\[\]\|_.,:;'"`~!@#$%^&*()+=<>?\\\/-]/g,' ').replace(/\s+/g,' ').trim(),chk:false,w});});
+  const top=[...cnt.entries()].sort((a,b)=>b[1]-a[1])[0];
+  rows.forEach(r=>{if(!r.order&&top){r.order=top[0];r.w.push('رقم الأوردر اتملّى من باقي الصفوف');}r.warn=r.w.join(' — ');});
+  return {rows,bad};}
+ function openImg(){if(!canEdit())return toast('إضافة أوردر من صورة تحتاج صلاحية إدخال بيانات','warn');
+  const o=document.createElement('div');o.className='modal';const G={rows:[],img:null,name:'',color:'',busy:false,bad:[]};
+  o.innerHTML=`<div class="mbox" style="max-width:1000px;width:97vw;max-height:92vh;overflow:auto"><h3 style="margin:0 0 6px">أوردر جديد من صورة</h3>
+  <div class="row" style="align-items:center"><input type="file" id="ig_f" accept="image/*"><label>اللون</label><input id="ig_c" style="width:80px" placeholder="9005"></div>
+  <div id="ig_p" class="muted" style="margin:6px 0"></div><div class="row"><button class="pri" id="ig_ocr" disabled>🔍 قراءة تلقائية من الصورة</button><button id="ig_add">+ صف يدوي</button><span id="ig_st" class="muted"></span></div>
+  <div id="ig_g" style="margin-top:8px"></div><div class="row" style="margin-top:8px"><button class="pri" id="ig_ok" disabled>إضافة للخطة</button><button id="ig_x">إغلاق</button></div></div>`;
+  document.body.appendChild(o);const $o=s=>o.querySelector(s);
+  const grid=()=>{const R=G.rows,un=R.filter(r=>!r.chk).length;
+   $o('#ig_g').innerHTML=R.length?`<div class="muted" style="margin-bottom:4px">راجع كل صف مع الصورة ثم علّم ✓ (الإضافة مقفولة لحد ما كل الصفوف تتراجع). ${G.bad.length?'⚠ '+G.bad.length+' سطر في الصورة لم يُقرأ — أضفه يدويا.':''}</div><div class="tw" style="max-height:44vh;overflow:auto"><table class="kt"><thead><tr><th>✓</th><th>الكود</th><th>الصنف</th><th>الكمية</th><th>الأوردر</th><th>العميل</th><th></th></tr></thead><tbody>${R.map((r,i)=>`<tr data-i="${i}" style="${r.warn?'background:#fffbeb':''}"><td><input type="checkbox" data-k="chk" ${r.chk?'checked':''}></td><td><input data-k="code" value="${esc(r.code)}" style="width:70px"></td><td><input data-k="name" dir="ltr" value="${esc(r.name)}" style="width:100%;min-width:260px">${r.warn?`<div class="muted" style="color:#b45309">${esc(r.warn)}</div>`:''}</td><td><input data-k="q" type="number" step="any" value="${r.q}" style="width:70px"></td><td><input data-k="order" value="${esc(r.order)}" style="width:80px"></td><td><input data-k="client" value="${esc(r.client)}" style="width:140px"></td><td><button class="mini del" data-del>حذف</button></td></tr>`).join('')}</tbody></table></div><div class="row" style="margin-top:6px"><button id="ig_all">✓ تأكيد كل الصفوف بعد المراجعة</button><span class="muted">${R.length} صف — ${un?un+' لم يُراجع':'كلها اتراجعت'}</span></div>`:'<p class="muted">لا توجد صفوف بعد: اختر الصورة واضغط قراءة تلقائية، أو أضف صفوفا يدويا.</p>';
+   $o('#ig_ok').disabled=!(R.length&&!un);
+   o.querySelectorAll('#ig_g tr[data-i]').forEach(tr=>{const r=R[+tr.dataset.i];tr.querySelectorAll('[data-k]').forEach(inp=>inp.onchange=()=>{const k=inp.dataset.k;if(k==='chk')r.chk=inp.checked;else{r[k]=k==='q'?(+inp.value||0):inp.value.trim();r.chk=false;}grid();});tr.querySelector('[data-del]').onclick=()=>{G.rows.splice(+tr.dataset.i,1);grid();};});
+   const a=$o('#ig_all');if(a)a.onclick=()=>{G.rows.forEach(r=>r.chk=true);grid();};};
+  grid();
+  $o('#ig_f').onchange=e=>{const f=e.target.files[0];if(!f)return;G.name=f.name;const url=URL.createObjectURL(f);G.img=f;$o('#ig_p').innerHTML=`<img src="${url}" style="max-width:100%;max-height:200px;border:1px solid #cbd5e1;border-radius:6px">`;$o('#ig_ocr').disabled=false;};
+  $o('#ig_add').onclick=()=>{G.rows.push({code:'',name:'',q:0,order:(G.rows[G.rows.length-1]||{}).order||'',client:(G.rows[G.rows.length-1]||{}).client||'',chk:false,warn:''});grid();};
+  $o('#ig_ocr').onclick=async()=>{if(G.busy||!G.img)return;G.busy=true;const st=$o('#ig_st');$o('#ig_ocr').disabled=true;
+   try{st.textContent='جاري تحميل مكتبة القراءة (أول مرة فقط، حوالي 8 ميجا)...';await loadScript(OCRSRC);
+    const bmp=await createImageBitmap(G.img);const sc=bmp.width<1800?2:1,cv=document.createElement('canvas');cv.width=bmp.width*sc;cv.height=bmp.height*sc;const cx=cv.getContext('2d');cx.imageSmoothingQuality='high';cx.drawImage(bmp,0,0,cv.width,cv.height);
+    st.textContent='جاري قراءة الصورة...';const w=await Tesseract.createWorker('eng+ara',1,{logger:m=>{if(m.status==='recognizing text')st.textContent='جاري القراءة '+Math.round(m.progress*100)+'%';}});
+    const r=await w.recognize(cv);await w.terminate();const p=parseOcr(r.data.text);window.__lastOcrText=r.data.text;
+    G.rows=p.rows;G.bad=p.bad;const col=$o('#ig_c');if(!col.value){const mm=/(\d{4})\)/.exec(p.rows[0]&&p.rows[0].name||'');if(mm)col.value=mm[1];}
+    st.textContent=p.rows.length?`قرأت ${p.rows.length} صف — راجعهم مع الصورة`:'لم أقرأ صفوف — استخدم الإدخال اليدوي';}
+   catch(err){console.error(err);st.textContent='تعذرت القراءة التلقائية: '+err.message+' — استخدم الإدخال اليدوي';}
+   G.busy=false;$o('#ig_ocr').disabled=false;grid();};
+  $o('#ig_ok').onclick=()=>{const R=G.rows,color=$o('#ig_c').value.trim();if(R.some(r=>!r.chk))return toast('راجع كل الصفوف الأول','warn');
+   for(const r of R){if(!r.code||!r.order||!(r.q>0)||!r.name)return toast('صف ناقص (الكود أو الصنف أو الكمية أو الأوردر)','warn');}
+   const p=PL(),cur=new Map(p.lines.map(x=>[x.id,x])),now=Date.now(),fid='i'+now.toString(36);let nw=0,up=0;const seen=new Map();
+   R.forEach(r=>{const id=String(r.code)+'|'+r.order,q=seen.has(id)?seen.get(id)+r.q:r.q;seen.set(id,q);});
+   seen.forEach((q,id)=>{const r=R.find(z=>String(z.code)+'|'+z.order===id),sh=/\[([^\]]+)\]/.exec(r.name),o2=cur.get(id),n={id,code:String(r.code),short:sh?sh[1]:'',name:r.name.replace(/^\[[^\]]*\]\s*/,''),q,q0:o2?(o2.q0!=null?o2.q0:o2.q):q,order:r.order,client:r.client,color:color||(/(\d{4})\)/.exec(r.name)||[])[1]||'',sheet:'صورة',f:fid,extra:true};
+    if(o2){Object.assign(o2,n);up++;}else{p.lines.push(n);nw++;}});
+   p.files.push({id:fid,name:'صورة: '+(G.name||'order'),at:now,by:U(),n:seen.size,nw,chg:up,img:true});
+   const msg=`إضافة أوردر من صورة (${R[0].order}): ${nw} جديد، ${up} محدّث`;if(window.__aud)window.__aud('plan',msg);save();o.remove();render();toast('✔ '+msg);};
+  $o('#ig_x').onclick=()=>o.remove();};
+ window.__parseOcr=parseOcr;
+ const _vp=viewPlan;
  TABS.push(['plan','الخطة الأسبوعية',viewPlan,bindPlan]);
  const ORDER=['home','entry','plan','log','close','kpi','tot','dt','stops','qc','rpt','map','set','tg','data','bk','lock','roles','audit','guide'];TABS.sort((a,b)=>ORDER.indexOf(a[0])-ORDER.indexOf(b[0]));
  window.__planParse=(buf,name)=>{parseBook(XLSX.read(buf,{type:'array'}),name||'t.xlsx');const c=compile();return {sheets:PEND.sheets.map(s=>({n:s.name,k:s.kind,read:s.read,hid:s.hidden,zero:s.zero,bad:s.bad,lines:s.lines.length,due:Object.keys(s.due).length})),c:{n:c.all.size,tot:c.tot,nw:c.nw,dup:c.dup}};};
@@ -2267,7 +2322,7 @@ new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});w
 })();
 /* ===== v4.1 auto-update: version check against version.json (no hard refresh needed) ===== */
 (function(){
- const BUILD='v5b-20261124110529';window.__BUILD=BUILD;
+ const BUILD='v5c-20261124110856';window.__BUILD=BUILD;
  if(typeof HOSTED!=='undefined'&&HOSTED)return;
  if(!/^https?:/.test(location.protocol))return;
  let shown=false,hiddenAt=0,busy=false;
