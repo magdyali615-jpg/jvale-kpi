@@ -249,6 +249,7 @@ table.kt th.srt{cursor:pointer;user-select:none}table.kt th.srt::after{content:'
 }
 .prt{--bg:#f2f4f7;--card:#fff;--ink:#1a2530;--mut:#66727f;--pri:#143a5c;--acc:#1b6ca8;--line:#dde3ea;--good:#18794e;--bad:#b3261e;--warn:#9a5b00;--soft:#eef3f8;color:#111;color-scheme:light}
 .prt h3,.prt h4{color:#143a5c}
+.tab[data-t=plan]{--ic:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='5'%20y='4'%20width='14'%20height='17'%20rx='2'/%3E%3Cpath%20d='M9%204V3h6v1M9%209h6M9%2013h6M9%2017h4'/%3E%3C/svg%3E")}
 
 </style></head><body>
 <header><h1><span class="brand">Jvale</span><span class="sep">|</span>قسم الإنتاج<small>منظومة متابعة مؤشرات الأداء الصناعي (OEE)</small></h1><label class="btn">فتح ملف<input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv,.json" hidden></label><button id="xr" class="excel-export" title="اختر قسمًا أو أكثر أو كل الأقسام لتصدير شيت مستقل لكل قسم">⬇ تصدير تقرير الأقسام Excel</button><span id="savest" class="pill ok"></span><button id="bk" title="حفظ في ملف على جهازك (يُحدَّد المكان مرة واحدة ثم يتم الحفظ تلقائيًا)">حفظ الآن</button><button id="rs">استعادة الإعدادات الأولية</button></header>
@@ -1779,7 +1780,7 @@ const rowSig=r=>JSON.stringify([r[0],r[1],r[2],r[3],r[4],r[5],r[6]||0]);
 const parseState=txt=>{const o=JSON.parse(txt);o.data=o.data||[];o.settings=o.settings||{};return o;};
 const rawOf=()=>JSON.parse(ser());
 function rowsHash(rows){let t=0;for(const r of rows){const s=rowSig(r);let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}t=(t+(h>>>0))>>>0;}return t.toString(36)+':'+rows.length;}
-function stable(o){const s=Object.assign({},o.settings);ghVol.forEach(k=>delete s[k]);return JSON.stringify({s,d:o.depts,m:o.map,e:o.excl,o:o.daysOff,c:o.closedD,r:rowsHash(o.data)});}
+function stable(o){const s=Object.assign({},o.settings);ghVol.forEach(k=>delete s[k]);return JSON.stringify({s,d:o.depts,m:o.map,e:o.excl,o:o.daysOff,c:o.closedD,p:o.plan,r:rowsHash(o.data)});}
 function getBase(){if(ghBaseObj)return ghBaseObj;try{const t=localStorage.getItem(GHB);if(t){ghBaseObj=parseState(t);return ghBaseObj;}}catch(e){}return null;}
 function setBase(txt){try{localStorage.setItem(GHB,txt);}catch(e){}ghBaseObj=parseState(txt);ghMarkNow();}
 function ghMarkNow(){const b=getBase();ghDirty=!!GHC&&(!b||stable(rawOf())!==stable(b));pill();}
@@ -1794,7 +1795,7 @@ function ghMerge(base,local,remote){
   const J=JSON.stringify,pick=k=>J(local[k])!==J(base[k])?local[k]:remote[k],bs=base.settings||{},st={};
   new Set([...Object.keys(remote.settings),...Object.keys(local.settings)]).forEach(k=>{st[k]=(ghVol.includes(k)||J(local.settings[k])!==J(bs[k]))?local.settings[k]:remote.settings[k];});
   const cd={};new Set([...Object.keys(remote.closedD||{}),...Object.keys(local.closedD||{}),...Object.keys(base.closedD||{})]).forEach(k=>{const l=(local.closedD||{})[k],b=(base.closedD||{})[k],r=(remote.closedD||{})[k],v=J(l)!==J(b)?l:r;if(v!==undefined)cd[k]=v;});
-  return {settings:st,depts:pick('depts'),map:pick('map'),excl:pick('excl'),daysOff:pick('daysOff'),data:rows,closedD:cd};}
+  return {settings:st,depts:pick('depts'),map:pick('map'),excl:pick('excl'),daysOff:pick('daysOff'),data:rows,closedD:cd,plan:(window.__mergePlan?window.__mergePlan(base,local,remote):local.plan),audit:local.audit||remote.audit};}
 function applyState(o,keepVol){const old=(S&&S.settings)||{};if(keepVol)ghVol.forEach(k=>{if(old[k]!==undefined)o.settings[k]=old[k];});o.data=o.data.map(r=>({wc:r[0],day:r[1],prod:r[2],cyc:r[3],qty:r[4],hrs:r[5],x:r[6]||null}));S=o;try{localStorage.setItem(KEY,ser());lastSave=new Date();}catch(e){}}
 const b64d=b=>{const bin=atob(b.replace(/\s/g,''));const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new TextDecoder().decode(u);};
 const b64u=s=>{const b=new TextEncoder().encode(s);let x='';for(let i=0;i<b.length;i+=0x8000)x+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(x);};
@@ -1852,8 +1853,8 @@ let fhT=0;const fhQ=()=>{cancelAnimationFrame(fhT);fhT=requestAnimationFrame(fix
 new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});window.addEventListener('resize',fhQ);
 /* ===== ERP layer v3 (modules sidebar, home, top bar, file menu, unified tables) ===== */
 (function(){
- const ORDER=['home','entry','log','close','kpi','tot','dt','stops','map','set','data','bk','lock','roles','audit','guide'];
- const GRP={entry:'الإنتاج',kpi:'الأداء',map:'البيانات الأساسية',data:'النظام'};
+ const ORDER=['home','entry','plan','log','close','kpi','tot','dt','stops','map','set','data','bk','lock','roles','audit','guide'];
+ const GRP={entry:'الإنتاج',plan:'الإنتاج',kpi:'الأداء',map:'البيانات الأساسية',data:'النظام'};
  const GN={home:'الرئيسية',entry:'الإنتاج',log:'الإنتاج',close:'الإنتاج',kpi:'الأداء',tot:'الأداء',dt:'الأداء',stops:'الأداء',qc:'الأداء',rpt:'الأداء',tg:'البيانات الأساسية',map:'البيانات الأساسية',set:'البيانات الأساسية',data:'النظام',bk:'النظام',lock:'النظام',roles:'النظام',audit:'النظام',guide:'النظام'};
  const nf=v=>v==null?'—':(Math.round(v*10)/10).toLocaleString('en-US',{maximumFractionDigits:1});
  const stH=(v,t)=>v==null?'':(v>=t-1e-9?`<span class="st-up">▲ +${((v-t)*100).toFixed(1)}</span>`:`<span class="st-dn">▼ ${((v-t)*100).toFixed(1)}</span>`);
@@ -1944,6 +1945,7 @@ new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});w
   else if(c)addA(c.k,c.s);
   if(df.sk.length){const lk=df.sk.includes('locked')&&!(c&&c.k==='lock');if(lk)addA('lock','تغيير قفل الشهور: '+(lockedList().join('، ')||'لا شهور مقفولة'));const o=df.sk.filter(k=>k!=='locked');if(o.length)addA('set','تعديل إعدادات: '+o.map(k=>SETN[k]||k).join('، '));}
   if(df.map)addA('map','تعديل خريطة مراكز العمل');if(df.excl)addA('excl','تعديل قائمة الاستبعاد');if(df.dep)addA('set','تعديل الأقسام');if(df.off)addA('set','تعديل أيام الإجازة');if(df.cl)addA('close','تعديل «التصنيع على النظام»');}
+ window.__aud=addA;
  function undoPoint(label,n){const u=LSg('jv_undo')||[];u.unshift({t:Date.now(),label,n,json:prevJson()});while(u.length>3)u.pop();if(!LSs('jv_undo',u)){u.length=1;LSs('jv_undo',[u[0]]);}}
  const _save=save;
  save=function(){try{const cur=snap(),df=diff(PREV,cur),lk=new Set(lockedList());
@@ -2090,7 +2092,7 @@ new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});w
  const rolesOn=()=>!!(S.settings.adminHash&&S.settings.editorHash);
  const isEd=()=>{try{return localStorage.getItem(EK)===S.settings.editorHash;}catch(e){return false;}};
  const role=()=>{if(!S.settings.adminHash||isAdmin())return 'admin';if(!rolesOn())return 'legacy';return isEd()?'editor':'viewer';};
- const VIEW=['home','log','kpi','tot','dt','qc','rpt','guide'],EDIT=VIEW.concat(['entry','close']);
+ const VIEW=['home','plan','log','kpi','tot','dt','qc','rpt','guide'],EDIT=VIEW.concat(['entry','close']);
  window.__tabOK=k=>{const r=role();if(k==='roles')return r==='admin';if(r==='admin')return true;if(r==='viewer')return VIEW.includes(k);if(r==='editor')return EDIT.includes(k);return !hiddenTabs().includes(k);};
  window.__wr=df=>{const r=role();if(r==='admin'||r==='legacy')return '';
   const data=df.add.length||df.rem.length||df.cl;const other=df.sk.length||df.map||df.excl||df.dep||df.off;
@@ -2127,9 +2129,130 @@ new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});w
   const done=()=>{o.remove();try{localStorage.setItem(K,'1');}catch(e){}};o.querySelector('#ts').onclick=done;o.querySelector('#tn').onclick=()=>{o.remove();if(i<ST.length-1)window.__tour(i+1);else done();};};
  if(!seen)setTimeout(()=>{if(!document.querySelector('.modal'))window.__tour(0);},2500);
 })();
+/* ===== v5 stage (a): weekly production plan (Excel upload, multi-sheet parse, preview, plan view) ===== */
+(function(){
+ const PL=()=>{if(!S.plan||!Array.isArray(S.plan.lines))S.plan={files:[],lines:[],due:{}};if(!S.plan.due)S.plan.due={};return S.plan;};
+ PL();
+ const _ap=applyState;applyState=function(){const r=_ap.apply(this,arguments);try{PL();}catch(e){}return r;};
+ const U=()=>{try{return localStorage.getItem('jvale_user_name')||'زائر';}catch(e){return 'زائر';}};
+ const canEdit=()=>!window.__tabOK||window.__tabOK('entry');
+ const nf=v=>v==null||v===''?'—':(Math.round(v*100)/100).toLocaleString('en-US');
+ const A=s=>String(s==null?'':s).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).trim();
+ /* merge hook used by GitHub sync: union by id, local changes win over the base */
+ window.__mergePlan=function(base,local,remote){try{const L=(local&&local.plan)||{files:[],lines:[],due:{}},B=(base&&base.plan)||{files:[],lines:[],due:{}},Rm=(remote&&remote.plan)||{files:[],lines:[],due:{}},J=JSON.stringify;
+   const mg=(k)=>{const m=new Map();(Rm[k]||[]).forEach(x=>m.set(x.id,x));const bm=new Map((B[k]||[]).map(x=>[x.id,x])),lm=new Map((L[k]||[]).map(x=>[x.id,x]));
+    lm.forEach((x,id)=>{if(!bm.has(id)||J(bm.get(id))!==J(x))m.set(id,x);});bm.forEach((x,id)=>{if(!lm.has(id))m.delete(id);});return [...m.values()];};
+   const due=Object.assign({},Rm.due||{},L.due||{});return {files:mg('files'),lines:mg('lines'),due};}catch(e){return local.plan;}};
+ /* ---------- reading the workbook ---------- */
+ function aoa(ws){const rg=ws['!ref']?XLSX.utils.decode_range(ws['!ref']):null;if(!rg)return {rows:[],hid:new Set()};const rows=[],hid=new Set(),rp=ws['!rows']||[];
+  for(let r=0;r<=rg.e.r;r++){const row=[];for(let c=0;c<=Math.min(rg.e.c,30);c++){const x=ws[XLSX.utils.encode_cell({r,c})];row.push(x&&x.v!=null?x.v:null);}rows.push(row);if(rp[r]&&rp[r].hidden)hid.add(r);}return {rows,hid};}
+ const serToISO=n=>new Date(Date.UTC(1899,11,30)+Math.floor(n)*864e5).toISOString().slice(0,10);
+ const H=s=>String(s==null?'':s).trim().toLowerCase();
+ function detect(name,rows){let hi=-1,kind='ignore',col={};
+  const t3=(rows[2]||[]).map(H).join('|');
+  if(/report/i.test(name)||/sum of shortage/.test(t3))return {kind:'ignore',why:'ريبورت (إجماليات)'};
+  for(let i=0;i<Math.min(rows.length,6);i++){const h=(rows[i]||[]).map(H);const ix=re=>h.findIndex(x=>re.test(x));
+   const code=ix(/^code/),prod=ix(/^product/),sh=ix(/^shortage/),tq=ix(/total quantity/),src=ix(/^(source|source document)$/),cl=ix(/^client/),cu=ix(/^customer/),so=ix(/^s order/),dl=ix(/dead\s*line/),ty=ix(/^type/),co=ix(/^color/);
+   if(prod>=0&&sh>=0&&src>=0){hi=i;kind='short';col={code,prod,q:sh,src,cl};break;}
+   if(prod>=0&&tq>=0&&src>=0){hi=i;kind=code>=0?'qty':'qty2';col={code,prod,q:tq,src,cl};break;}
+   if(so>=0&&dl>=0){hi=i;kind='due';col={cu,ty,so,co,dl};break;}}
+  return hi<0?{kind:'ignore',why:'شكل غير معروف'}:{kind,hi,col};}
+ const colorOf=(txt,sheet)=>{const m=/(\d{4})\)\s*$/.exec(String(txt||''));if(m)return m[1];const s=/(\d{4})/.exec(sheet);return s?s[1]:'';};
+ const shortOf=t=>{const m=/\[([^\]]+)\]\s*(.*)$/.exec(String(t||''));return m?{code:m[1],name:m[2]}:{code:'',name:String(t||'')};};
+ const codeNum=t=>{const m=/-(\d+)\]/.exec(String(t||''));return m?m[1]:'';};
+ function readSheet(name,ws,forceKind){const {rows,hid}=aoa(ws);const d=detect(name,rows);const kind=forceKind||d.kind;const res={name,kind,guess:d.kind,why:d.why||'',read:0,hidden:0,zero:0,bad:0,lines:[],due:{}};
+  if(d.hi==null||kind==='ignore')return res;const c=d.col;
+  if(kind==='due'){for(let r=d.hi+1;r<rows.length;r++){const x=rows[r],o=A(x[c.so]);if(!o)continue;let dt=x[c.dl];let iso_='';if(typeof dt==='number')iso_=serToISO(dt);else if(dt)iso_=String(dt).slice(0,10);res.read++;res.due[o]={date:iso_,customer:A(x[c.cu]),type:A(x[c.ty]),color:A(x[c.co])};}return res;}
+  const mp=new Map();
+  for(let r=d.hi+1;r<rows.length;r++){const x=rows[r],pt=A(x[c.prod]);if(!pt)continue;res.read++;
+   if(hid.has(r)){res.hidden++;continue;}
+   let q=x[c.q];q=typeof q==='number'?q:parseFloat(A(q).replace(/,/g,''));if(!isFinite(q)){res.bad++;continue;}
+   q=Math.abs(q);if(!(q>0)){res.zero++;continue;}
+   const sp=shortOf(pt),code=kind==='qty2'?codeNum(pt):(A(x[c.code])||codeNum(pt)),order=A(x[c.src]);if(!code||!order){res.bad++;continue;}
+   const id=code+'|'+order,cur=mp.get(id);if(cur){cur.q+=q;cur.dup=(cur.dup||1)+1;}else mp.set(id,{id,code,short:sp.code,name:sp.name,q,order,client:A(x[c.cl]),color:colorOf(pt,name),sheet:name.trim()});}
+  res.lines=[...mp.values()];return res;}
+ let PEND=null;
+ function parseBook(wb,fname){const sheets=wb.SheetNames.map(n=>({n,ws:wb.Sheets[n]}));PEND={fname,sheets:sheets.map(s=>Object.assign(readSheet(s.n,s.ws),{ws:s.ws}))};}
+ function compile(){const cur=new Map(PL().lines.map(l=>[l.id,l])),all=new Map(),due={};let dup=0;
+  PEND.sheets.forEach(s=>{if(s.kind==='due')Object.assign(due,s.due);else if(s.kind==='short'||s.kind==='qty'||s.kind==='qty2')s.lines.forEach(l=>{if(all.has(l.id)){const o=all.get(l.id);o.q=Math.max(o.q,l.q);o.sheet+=' + '+l.sheet;dup++;}else all.set(l.id,Object.assign({},l));});});
+  let nw=0,chg=0,same=0;all.forEach((l,id)=>{const o=cur.get(id);if(!o)nw++;else if(Math.abs(o.q-l.q)>1e-9)chg++;else same++;});
+  const absent=[...cur.keys()].filter(id=>!all.has(id)).length;
+  return {all,due,nw,chg,same,absent,dup,tot:[...all.values()].reduce((s,l)=>s+l.q,0)};}
+ const KIND={short:'أوردرات (shortage سالب = المطلوب)',qty:'أوردرات (إجمالي الكمية)',qty2:'أوردرات (إجمالي الكمية، كود من الاسم)',due:'مواعيد التسليم',ignore:'تجاهل'};
+ function viewPrev(){const p=PEND;if(!p)return '';const c=compile();
+  return `<div class="card hotc"><h3>معاينة قبل الحفظ — ${esc(p.fname)}</h3>
+  <table class="rl-t"><tr><th>الشيت</th><th>النوع</th><th>صفوف</th><th>مخفية</th><th>صفر</th><th>غير صالحة</th><th>سطور الخطة</th></tr>
+  ${p.sheets.map((s,i)=>`<tr><td dir="ltr" style="text-align:right">${esc(s.name.trim())}${s.why?`<br><span class="muted">${esc(s.why)}</span>`:''}</td><td><select data-pk="${i}">${Object.keys(KIND).map(k=>`<option value="${k}" ${k===s.kind?'selected':''}>${KIND[k]}</option>`).join('')}</select></td><td>${s.read||'—'}</td><td>${s.hidden||'—'}</td><td>${s.zero||'—'}</td><td>${s.bad||'—'}</td><td><b>${s.kind==='due'?Object.keys(s.due).length+' موعد':s.lines.length||'—'}</b></td></tr>`).join('')}</table>
+  <div class="trk-sum"><div class="tile"><b>${c.all.size}</b><span>سطر في الخطة</span></div><div class="tile"><b>${nf(c.tot)}</b><span>إجمالي الكمية</span></div><div class="tile"><b>${c.nw}</b><span>جديد</span></div><div class="tile"><b>${c.chg}</b><span>كمية معدّلة</span></div><div class="tile"><b>${c.same}</b><span>بدون تغيير</span></div><div class="tile"><b>${c.absent}</b><span>موجود قبل كده وليس في الملف (يفضل كما هو)</span></div></div>
+  <p class="muted">الكمية = القيمة المطلقة للـ shortage. الصفوف المخفية أو الصفر (مغطاة) لا تدخل الخطة. السطر = كود الصنف + رقم الأوردر.${c.dup?` ⚠ ${c.dup} سطر ظاهر في أكتر من شيت بنفس الكود والأوردر (مثلا شيت 9005 وشيت 9016) — اتحسب مرة واحدة بدل ما يتضاعف.`:''}</p>
+  <div class="row"><button class="pri" id="plOk" ${c.all.size||Object.keys(c.due).length?'':'disabled'}>حفظ في الخطة</button><button id="plNo">إلغاء</button></div></div>`;}
+ const PV={q:'',color:'',order:'',lim:200};
+ function dueOf(o){const d=PL().due[o];return d&&d.date?d.date:'';}
+ function viewPlan(){const p=PL(),lines=p.lines,colors=[...new Set(lines.map(l=>l.color).filter(Boolean))].sort(),orders=[...new Set(lines.map(l=>l.order))].sort();
+  const up=canEdit()?`<label class="btn pri" style="display:inline-flex;align-items:center;height:36px;padding:0 14px;border-radius:9px;cursor:pointer">رفع ملف الخطة (Excel)<input type="file" id="plF" accept=".xlsx,.xls" style="display:none"></label>`:'<span class="muted">رفع الخطة يحتاج صلاحية إدخال بيانات أو مسؤول.</span>';
+  return `<div id="plPrev">${viewPrev()}</div><div class="card hotc"><h3>الخطة الأسبوعية</h3><div class="row">${up}<span class="muted">${p.files.length?'آخر ملف: '+esc(p.files[p.files.length-1].name)+' — '+new Date(p.files[p.files.length-1].at).toLocaleDateString('en-GB'):'لم يتم رفع خطة بعد'}</span></div>
+  <div id="plSum" class="trk-sum"></div>
+  <div class="row"><input id="plq" placeholder="🔍 كود أو اسم صنف أو أوردر أو عميل" style="width:280px" value="${esc(PV.q)}"><label>اللون</label><select id="plc"><option value="">الكل</option>${colors.map(c=>`<option ${c===PV.color?'selected':''}>${esc(c)}</option>`).join('')}</select><label>الأوردر</label><select id="plo"><option value="">الكل</option>${orders.map(c=>`<option ${c===PV.order?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+  <div id="plT"></div></div>`;}
+ function drawPlan(){const p=PL(),PRG=progress(),q=A(PV.q).toLowerCase();let L=p.lines.filter(l=>(!PV.color||l.color===PV.color)&&(!PV.order||l.order===PV.order)&&(!q||(l.code+' '+l.short+' '+l.name+' '+l.order+' '+l.client).toLowerCase().includes(q)));
+  const doneQ=L.reduce((s,l)=>s+Math.min(l.q,PRG.get(l.id)||0),0),tot=L.reduce((s,l)=>s+l.q,0),ors=new Set(L.map(l=>l.order)).size;
+  $('#plSum').innerHTML=`<div class="tile"><b>${L.length}</b><span>سطر</span></div><div class="tile"><b>${nf(tot)}</b><span>إجمالي الكمية</span></div><div class="tile"><b>${ors}</b><span>أوردر</span></div><div class="tile"><b>${nf(doneQ)}</b><span>تم تسجيله (${tot?Math.round(doneQ/tot*100):0}%)</span></div><div class="tile"><b>${nf(tot-doneQ)}</b><span>المتبقي</span></div>`;
+  L=L.slice().sort((a,b)=>(dueOf(a.order)||'9').localeCompare(dueOf(b.order)||'9')||a.order.localeCompare(b.order)||a.code.localeCompare(b.code));
+  const sh=L.slice(0,PV.lim);
+  $('#plT').innerHTML=L.length?`<div class="tw"><table class="kt"><thead><tr><th>اللون</th><th>الكود</th><th>الصنف</th><th>الأوردر</th><th>العميل</th><th>التسليم</th><th>الخطة</th><th>تم</th><th>المتبقي</th><th>الحالة</th></tr></thead><tbody>${sh.map(l=>`<tr><td>${esc(l.color||'—')}</td><td>${esc(l.code)}</td><td style="text-align:right" dir="ltr">${esc(nameOf(l))}</td><td>${esc(l.order)}</td><td>${esc(l.client)}</td><td style="white-space:nowrap">${esc(dueOf(l.order)||'—')}</td><td>${nf(l.q)}</td><td>${nf(PRG.get(l.id)||0)}</td><td><b>${nf(Math.max(0,l.q-(PRG.get(l.id)||0)))}</b></td><td>${STN[stOf(l.q,PRG.get(l.id)||0)]}</td></tr>`).join('')}</tbody></table></div>${L.length>sh.length?`<p class="muted">يُعرض ${sh.length} من ${L.length} <button id="plMore">عرض المزيد</button></p>`:''}`:'<p class="muted">لا توجد سطور (ارفع ملف الخطة أو غيّر الفلتر).</p>';
+  const m=$('#plMore');if(m)m.onclick=()=>{PV.lim+=300;drawPlan();};}
+ function bindPlan(){const redraw=()=>{$('#plPrev').innerHTML=viewPrev();bindPrev();};
+  const f=$('#plF');if(f)f.onchange=e=>{const file=e.target.files[0];if(!file)return;if(!canEdit())return toast('رفع الخطة يحتاج صلاحية إدخال بيانات','warn');const rd=new FileReader();rd.onload=()=>{try{const wb=XLSX.read(rd.result,{type:'array'});parseBook(wb,file.name);redraw();const el=$('#plPrev');if(el)el.scrollIntoView({behavior:'smooth'});}catch(err){console.error(err);toast('تعذر قراءة الملف: '+err.message,'warn');}};rd.readAsArrayBuffer(file);};
+  const bindPrev=()=>{$$('#plPrev [data-pk]').forEach(s=>s.onchange=()=>{const i=+s.dataset.pk,o=PEND.sheets[i];PEND.sheets[i]=Object.assign(readSheet(o.name,o.ws,s.value),{ws:o.ws});redraw();});
+   const ok=$('#plOk'),no=$('#plNo');if(no)no.onclick=()=>{PEND=null;redraw();};
+   if(ok)ok.onclick=()=>{if(!canEdit())return toast('الحفظ يحتاج صلاحية إدخال بيانات','warn');const c=compile(),p=PL(),now=Date.now(),fid='f'+now.toString(36),cur=new Map(p.lines.map(l=>[l.id,l]));
+    c.all.forEach((l,id)=>{const o=cur.get(id),n={id,code:l.code,short:l.short,name:l.name,q:l.q,q0:o?(o.q0!=null?o.q0:o.q):l.q,order:l.order,client:l.client,color:l.color,sheet:l.sheet,f:fid};if(o)Object.assign(o,n);else{p.lines.push(n);cur.set(id,n);}});
+    Object.assign(p.due,c.due);p.files.push({id:fid,name:PEND.fname,at:now,by:U(),n:c.all.size,nw:c.nw,chg:c.chg});if(p.files.length>30)p.files.splice(0,p.files.length-30);
+    const msg=`رفع خطة «${PEND.fname}»: ${c.nw} جديد، ${c.chg} معدّل، ${c.same} بدون تغيير`;if(window.__aud)window.__aud('plan',msg);PEND=null;save();render();toast('✔ '+msg);};};
+  bindPrev();
+  $('#plq').oninput=e=>{PV.q=e.target.value;drawPlan();};$('#plc').onchange=e=>{PV.color=e.target.value;drawPlan();};$('#plo').onchange=e=>{PV.order=e.target.value;drawPlan();};drawPlan();}
+ TABS.push(['plan','الخطة الأسبوعية',viewPlan,bindPlan]);
+ const ORDER=['home','entry','plan','log','close','kpi','tot','dt','stops','qc','rpt','map','set','tg','data','bk','lock','roles','audit','guide'];TABS.sort((a,b)=>ORDER.indexOf(a[0])-ORDER.indexOf(b[0]));
+ window.__planParse=(buf,name)=>{parseBook(XLSX.read(buf,{type:'array'}),name||'t.xlsx');const c=compile();return {sheets:PEND.sheets.map(s=>({n:s.name,k:s.kind,read:s.read,hid:s.hidden,zero:s.zero,bad:s.bad,lines:s.lines.length,due:Object.keys(s.due).length})),c:{n:c.all.size,tot:c.tot,nw:c.nw,dup:c.dup}};};
+
+ /* ---------- stage (b): picker inside the machine drawer + progress from rows ---------- */
+ function progress(){const m=new Map();S.data.forEach(r=>{const p=r.x&&r.x.plan;if(p&&p.l)m.set(p.l,(m.get(p.l)||0)+(+r.qty||0));});return m;}
+ window.__planProg=progress;
+ const stOf=(q,d)=>d<=0?'todo':d<q-1e-9?'part':d>q+1e-9?'over':'done';
+ const STN={todo:'لم يبدأ',part:'جزئي',done:'تم',over:'زيادة عن الخطة'};
+ const nameOf=l=>(l.dn||l.name||'').trim();
+ function openPicker(m){const p=PL(),pr=progress(),colors=[...new Set(p.lines.map(x=>x.color).filter(Boolean))].sort();
+  const o=document.createElement('div');o.className='modal';const F={q:'',c:'',all:false,sel:null,lim:80};
+  o.innerHTML=`<div class="mbox" style="max-width:860px;width:96vw;max-height:90vh;overflow:auto"><h3 style="margin:0 0 8px">اختيار من الخطة الأسبوعية <span class="muted" style="font-size:12px">— ${esc(m.wc)}</span></h3>
+  <div class="row"><input id="pk_q" placeholder="🔍 كود أو اسم أو أوردر أو عميل" style="flex:1;min-width:200px"><select id="pk_c"><option value="">كل الألوان</option>${colors.map(c=>`<option>${esc(c)}</option>`).join('')}</select><label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="pk_a"> إظهار المخلّص</label></div>
+  <div id="pk_t"></div><div id="pk_s"></div><div class="row" style="margin-top:8px"><button id="pk_x">إغلاق</button></div></div>`;
+  document.body.appendChild(o);const $o=s=>o.querySelector(s);
+  const draw=()=>{const q=A(F.q).toLowerCase();let L=p.lines.filter(x=>(!F.c||x.color===F.c)&&(!q||(x.code+' '+x.short+' '+nameOf(x)+' '+x.order+' '+x.client).toLowerCase().includes(q)));
+   L=L.map(x=>({x,d:pr.get(x.id)||0})).filter(z=>F.all||z.x.q-z.d>1e-9||F.sel===z.x.id).sort((a,b)=>(dueOf(a.x.order)||'9').localeCompare(dueOf(b.x.order)||'9')||a.x.order.localeCompare(b.x.order));
+   const sh=L.slice(0,F.lim);$o('#pk_t').innerHTML=sh.length?`<div class="tw" style="max-height:42vh;overflow:auto"><table class="kt"><thead><tr><th>الأوردر</th><th>الصنف</th><th>الخطة</th><th>تم</th><th>المتبقي</th></tr></thead><tbody>${sh.map(z=>{const x=z.x,rm=x.q-z.d;return `<tr data-id="${esc(x.id)}" style="cursor:pointer;${F.sel===x.id?'background:#dbeafe':''}"><td>${esc(x.order)}<br><span class="muted">${esc(x.client)}</span></td><td dir="ltr" style="text-align:right">${esc(nameOf(x))}<br><span class="muted">${esc(x.code)} · ${esc(x.color)}</span></td><td>${nf(x.q)}</td><td>${nf(z.d)}</td><td><b>${nf(Math.max(0,rm))}</b></td></tr>`;}).join('')}</tbody></table></div>${L.length>sh.length?`<p class="muted">يُعرض ${sh.length} من ${L.length} — ضيّق البحث</p>`:''}`:'<p class="muted">لا توجد سطور مطابقة'+(p.lines.length?'':' (ارفع ملف الخطة أولا)')+'.</p>';
+   $o('#pk_t').querySelectorAll('tr[data-id]').forEach(tr=>tr.onclick=()=>{F.sel=tr.dataset.id;draw();sel();});};
+  const sel=()=>{const x=p.lines.find(z=>z.id===F.sel);if(!x){$o('#pk_s').innerHTML='';return;}const rm=Math.max(0,x.q-(pr.get(x.id)||0));
+   $o('#pk_s').innerHTML=`<div class="card" style="margin-top:8px"><div class="muted">المختار: ${esc(x.order)} — ${esc(x.code)}</div><label>اسم الصنف (قابل للتعديل، لا يغيّر الربط بالخطة)</label><input id="pk_n" value="${esc(nameOf(x))}" dir="ltr" style="width:100%"><label>الكمية المنتجة (المتبقي ${nf(rm)} من ${nf(x.q)})</label><input id="pk_qt" type="number" step="any" value="${rm}"><div class="row" style="margin-top:8px"><button class="pri" id="pk_ok">استخدم في الماكينة</button></div></div>`;
+   $o('#pk_ok').onclick=()=>{const nm=$o('#pk_n').value.trim(),qt=+$o('#pk_qt').value;if(!nm)return toast('اكتب اسم الصنف','warn');if(!(qt>0))return toast('أدخل كمية أكبر من صفر','warn');
+    if(nm!==x.name&&nm!==nameOf(x)||nm!==nameOf(x)){x.dn=nm;}else if(nm===x.name)delete x.dn;
+    BO.dr.prod=nm;BO.dr.qty=String(qt);BO.dr.plan=x.id;o.remove();drawDrawer();const pi=$('#bd_prod');if(pi&&pi.onchange)pi.onchange({target:pi});const h=$('#bd_hrs');if(h)h.focus();save();};};
+  $o('#pk_q').oninput=e=>{F.q=e.target.value;draw();};$o('#pk_c').onchange=e=>{F.c=e.target.value;draw();};$o('#pk_a').onchange=e=>{F.all=e.target.checked;draw();};$o('#pk_x').onclick=()=>o.remove();o.addEventListener('click',e=>{if(e.target===o)o.remove();});draw();}
+ const _dd=drawDrawer;
+ drawDrawer=function(){_dd.apply(this,arguments);try{const el=$('#bdrawer'),d=entryDay(),m=boardData(d).find(x=>x.n===BO.sel);if(!el||!m)return;const p=PL();
+  const h4=[...el.querySelectorAll('h4')].find(h=>/إضافة تسجيل/.test(h.textContent));
+  if(h4){const b=document.createElement('button');b.type='button';b.className='pri';b.id='bd_plan';b.style.cssText='width:100%;margin:6px 0';b.textContent=p.lines.length?'📋 من الخطة الأسبوعية':'📋 من الخطة (ارفع ملف الخطة أولا)';b.onclick=()=>{if(!p.lines.length)return toast('ارفع ملف الخطة من تاب الخطة الأسبوعية أولا','warn');openPicker(m);};h4.after(b);
+   if(BO.dr.plan){const x=p.lines.find(z=>z.id===BO.dr.plan);if(x){const t=document.createElement('div');t.className='muted';t.style.cssText='background:#eff6ff;padding:6px 8px;border-radius:8px;margin-bottom:6px';t.innerHTML=`مربوط بالخطة: <b>${esc(x.order)}</b> — ${esc(x.code)} <button type="button" class="mini" id="bd_unplan">إلغاء الربط</button>`;b.after(t);t.querySelector('#bd_unplan').onclick=()=>{delete BO.dr.plan;drawDrawer();};}}}
+  el.querySelectorAll('.brow[data-ix]').forEach(rw=>{const r=S.data[+rw.dataset.ix];if(!r||isStop(r))return;const pl=r.x&&r.x.plan,ln=pl&&p.lines.find(z=>z.id===pl.l);const hd=rw.querySelector('.brh b');if(!hd)return;
+   if(ln){const dn=progress().get(ln.id)||0;hd.insertAdjacentHTML('afterend',` <span class="pl2 ok" style="font-size:11px">من الخطة ${esc(ln.order)} · ${nf(dn)}/${nf(ln.q)}${dn<ln.q?' · متبقي '+nf(ln.q-dn):''}</span>`);}
+   else if(p.lines.length&&!(r.x&&r.x.draft))hd.insertAdjacentHTML('afterend',' <span class="pl2 part" style="font-size:11px">خارج الخطة</span>');});
+  const sv=['#bd_save','#bd_next'].map(s=>$(s)).filter(Boolean);
+  sv.forEach(b=>b.addEventListener('click',()=>{const n=S.data.length,pid=BO.dr.plan,pn=String(BO.dr.prod||'').trim();if(!pid)return;setTimeout(()=>{if(S.data.length>n){const r=S.data[S.data.length-1];if(r&&String(r.prod).trim()===pn&&(!r.x||!r.x.plan)){r.x=Object.assign({},r.x||{},{plan:{l:pid}});save();recompute();try{drawDrawer();drawEntryRows();}catch(e){}}}},0);},true));
+  el.querySelectorAll('[data-bp]').forEach(b=>b.addEventListener('click',()=>{delete BO.dr.plan;},true));
+ }catch(e){console.error('plan drawer',e);}};
+})();
 /* ===== v4.1 auto-update: version check against version.json (no hard refresh needed) ===== */
 (function(){
- const BUILD='v4.1-20261124100535';window.__BUILD=BUILD;
+ const BUILD='v5a-20261124104959';window.__BUILD=BUILD;
  if(typeof HOSTED!=='undefined'&&HOSTED)return;
  if(!/^https?:/.test(location.protocol))return;
  let shown=false,hiddenAt=0,busy=false;
