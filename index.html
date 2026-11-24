@@ -1409,9 +1409,11 @@ Sh.prototype.merge=function(a,b,c,d,v,s){const colL=n=>{let t='';while(n){const 
 function kpiBlock(sh,r0,title,rows){sh.merge(r0,1,r0,10,title,'bold');sh.merge(r0+1,1,r0+2,1,'القسم','hdr');[['استغلال الطاقة الإنتاجية (الهدف 85%)',2],['الأداء في OEE (الهدف 100%)',5],['التوافر في OEE (الهدف 100%)',8]].forEach(([t,c])=>sh.merge(r0+1,c,r0+1,c+2,t,'hdr'));
   const sub=['حجم الإنتاج الفعلي (كمية)','الطاقة القصوى (كمية)','%','الزمن المثالي للإنتاج الفعلي (دقيقة)','زمن التشغيل الفعلي (دقيقة)','%','زمن التشغيل الفعلي (دقيقة)','زمن الإنتاج المخطط (دقيقة)','%'];sub.forEach((t,i)=>sh.set(r0+2,2+i,t,'sub'));sh.heights[r0+2]=48;
   rows.forEach((x,i)=>{const r=r0+3+i;sh.set(r,1,x.dept,'bold');[['qty','num1'],['cap','num1'],['u','pct'],['ideal','num1'],['run','num1'],['p','pct'],['run2','num1'],['plan','num1'],['a','pct']].forEach(([k,s],j)=>sh.set(r,2+j,x[k]==null?'':x[k],s));});return r0+3+rows.length;}
-function buildReport(selectedDepts=null){const d=S.settings.selDay,sheets=[],stamp='مولّد من برنامج Jvale — قسم الإنتاج';
+function buildReport(selectedDepts=null,pf=null,pt=null){const Rs=R;
+  try{if(pf!=null&&pt!=null)R=K.compute(Object.assign({},S,{settings:Object.assign({},S.settings,{kpiFrom:pf,kpiTo:pt})}));return buildReportIn(selectedDepts);}finally{R=Rs;}}
+function buildReportIn(selectedDepts=null){const d=R.validDays.includes(S.settings.selDay)?S.settings.selDay:(R.validDays.length?R.validDays[R.validDays.length-1]:null),sheets=[],stamp='مولّد من برنامج Jvale — قسم الإنتاج';
   const E=new Sh('KPI Entry',{rtl:true,widths:[30,17,17,13,17,17,13,17,17,13]});E.set(1,1,'إدخال مؤشرات OEE على بوابة KPI — الأرقام جاهزة للنسخ','title');E.set(2,1,stamp,'note');
-  E.set(3,1,'اليوم المطلوب إدخاله','bold').set(3,2,d,'inDate');E.set(4,1,'أول يوم في الشهر','bold').set(4,2,S.settings.monthStart,'inDate');E.set(5,1,'آخر يوم عليه بيانات في الشيت','bold').set(5,2,R.validDays.length?R.validDays[R.validDays.length-1]:'','date');E.set(6,1,'دقائق الوردية المخططة','bold').set(6,2,S.settings.shift,'inNum');
+  E.set(3,1,'اليوم المطلوب إدخاله','bold').set(3,2,d,'inDate');E.set(4,1,'أول يوم في الفترة','bold').set(4,2,R.pFrom,'inDate');E.set(5,1,'آخر يوم عليه بيانات في الشيت','bold').set(5,2,R.validDays.length?R.validDays[R.validDays.length-1]:'','date');E.set(6,1,'دقائق الوردية المخططة','bold').set(6,2,S.settings.shift,'inNum');
   let r=kpiBlock(E,8,'① بيانات اليوم المختار (انسخها في جدول الإدخال اليومي للمؤشر)',d==null?[]:R.dayTable(d));kpiBlock(E,r+1,'② تراكمي الشهر (القيمة الشهرية = مجموع البسط ÷ مجموع المقام، وليست متوسط النسب)',R.monthTable());sheets.push(E);
   const Lg=new Sh('KPI Daily Log',{widths:[13,22,15,15,10,17,15,10,15,15,10],freeze:5});Lg.set(1,1,'KPI Daily Log — مؤشرات الأقسام لكل الأيام متتابعة (للنسخ)','title');Lg.set(2,1,stamp,'note');Lg.set(3,1,'عدد الأيام','bold').set(3,2,R.validDays.length,'inNum');
   Lg.merge(4,1,5,1,'التاريخ','hdr');Lg.merge(4,2,5,2,'القسم','hdr');[['استغلال الطاقة الإنتاجية (الهدف 85%)',3],['الأداء في OEE (الهدف 100%)',6],['التوافر في OEE (الهدف 100%)',9]].forEach(([t,c])=>Lg.merge(4,c,4,c+2,t,'hdr'));
@@ -1425,9 +1427,9 @@ function buildReport(selectedDepts=null){const d=S.settings.selDay,sheets=[],sta
   S.depts.forEach((dp,i)=>{const l=au.filter(x=>x.dept===dp);St.set(5+i,1,dp,'bold').set(5+i,2,l.length,'num2').set(5+i,3,l.reduce((s,x)=>s+x.plan,0),'num1');});const n0=5+S.depts.length;St.set(n0,1,'الإجمالي','tTxt').set(n0,2,au.length,'tNum').set(n0,3,au.reduce((s,x)=>s+x.plan,0),'tNum1');
   const h0=n0+3;['#','التاريخ','Work Center','القسم','دقائق مخططة احتُسبت توقف','الملحوظة'].forEach((t,i)=>St.set(h0,1+i,t,'hdr'));St.heights[h0]=34;
   au.forEach((x,i)=>{const rr=h0+1+i;St.set(rr,1,i+1,'num2').set(rr,2,x.day,'date').set(rr,3,x.wc,'txt').set(rr,4,x.dept,'txt').set(rr,5,x.plan,'num1').set(rr,6,'غير مسجل في Data — احتُسبت متوقفة (التوافر = 0 لهذه الماكينة في هذا اليوم)','txt');});St.filter=`A${h0}:F${h0+au.length}`;sheets.push(St);
-  const T=new Sh('Work Center Totals',{widths:[44,24,12,12,16,16,16,16],freeze:4});T.set(1,1,'تجميع مركز العمل — الكميات وساعات العمل مقسّمة بالأقسام (تراكمي الشهر)','title');T.set(2,1,`${stamp} — من ${iso(S.settings.monthStart)} إلى ${iso(R.validDays.length?R.validDays[R.validDays.length-1]:R.eom)}`,'note');
+  const T=new Sh('Work Center Totals',{widths:[44,24,12,12,16,16,16,16],freeze:4});T.set(1,1,'تجميع مركز العمل — الكميات وساعات العمل مقسّمة بالأقسام (تراكمي '+R.pWord+')','title');T.set(2,1,`${stamp} — من ${iso(R.pFrom)} إلى ${iso(R.pTo)}`,'note');
   ['Work center','القسم','عدد الصفوف','عدد الأيام','إجمالي الكمية','ساعات التشغيل','ساعات التوقف','إجمالي الساعات'].forEach((t,i)=>T.set(4,1+i,t,'hdr'));T.heights[4]=34;
-  const f=S.settings.monthStart,t=R.validDays.length?R.validDays[R.validDays.length-1]:R.eom;const rows=S.data.filter(x=>!(x.x&&x.x.draft)&&x.day>=f&&x.day<=t),g=new Map();
+  const f=R.pFrom,t=R.pTo;const rows=S.data.filter(x=>!(x.x&&x.x.draft)&&x.day>=f&&x.day<=t),g=new Map();
   for(const x of rows){const k=K.norm(x.wc);let a=g.get(k);if(!a){a={wc:x.wc,dept:deptOfN(k)||'—',rows:0,days:new Set(),qty:0,run:0,stop:0};g.set(k,a);}a.rows++;a.days.add(x.day);a.qty+=+x.qty||0;if(isStop(x))a.stop+=+x.hrs||0;else a.run+=+x.hrs||0;}
   {const HM=hoursMap(f,t,'');const add=new Map();for(const h of HM.values())add.set(h.n,(add.get(h.n)||0)+(h.plan-h.run)/60);for(const [n,st] of add){let a=g.get(n);if(!a){a={wc:(HM.get([...HM.keys()].find(k=>k.startsWith(n+'|')))||{}).wc||n,dept:deptOfN(n)||'—',rows:0,days:new Set(),qty:0,run:0,stop:0};g.set(n,a);}a.stop=Math.max(st,a.stop);}}
   const ord=dp=>{const i=S.depts.indexOf(dp);return i<0?99:i;},by=new Map();[...g.values()].forEach(a=>{if(!by.has(a.dept))by.set(a.dept,[]);by.get(a.dept).push(a);});let rr=5;const gt={rows:0,qty:0,run:0,stop:0};
@@ -1437,7 +1439,7 @@ function buildReport(selectedDepts=null){const d=S.settings.selDay,sheets=[],sta
   T.set(rr,1,'الإجمالي الكلي','tTxt').set(rr,2,'','tTxt').set(rr,3,gt.rows,'tNum').set(rr,4,'','tTxt').set(rr,5,r2(gt.qty),'tNum').set(rr,6,r2(gt.run),'tNum').set(rr,7,r2(gt.stop),'tNum').set(rr,8,r2(gt.run+gt.stop),'tNum');sheets.push(T);
 
   // شيت واحد لكل قسم، ويضم داخله جميع مراكز العمل التابعة له
-  const f0=S.settings.monthStart,t0=R.eom;
+  const f0=R.pFrom,t0=R.pTo;
   const monthData=S.data.filter(x=>!(x.x&&x.x.draft)&&x.day>=f0&&x.day<=t0);
   const deptMap=new Map();
   // عند اختيار الأقسام من زر التصدير، ننشئ شيتًا لكل قسم مختار حتى لو لم توجد له تسجيلات في الفترة.
@@ -1615,37 +1617,46 @@ sheets.push(W);
   }
   // عند تحديد قسم/أقسام من النافذة، يكون الملف مخصصًا للقسم ومؤشراته فقط.
   return Array.isArray(selectedDepts)?sheets.slice(5):sheets;}
+function xpMonth(k){const n=new Date(),a=Math.round(Date.UTC(n.getFullYear(),n.getMonth()+k,1)/86400000)+25569;return [a,K.eomonth(a)];}
 function pickReportDepts(list){return new Promise(resolve=>{
+  const xp0=xpMonth(0);
   const o=document.createElement('div');o.className='modal';
   o.innerHTML=`<div class="mbox pxbox" role="dialog" aria-modal="true">
     <p><b>تصدير تقرير الأقسام — Excel</b><br><span class="muted">اختر قسمًا واحدًا أو أكثر؛ سيتم تنزيل ملف Excel مستقل لكل قسم</span></p>
+    <div class="row" style="margin:6px 0"><label>فترة التقرير</label><label>من</label><input type="date" id="xpf" value="${iso(xp0[0])}"><label>إلى</label><input type="date" id="xpt" value="${iso(xp0[1])}"></div>
+    <div class="row" style="margin:0 0 8px"><button type="button" data-xp="cur">هذا الشهر</button><button type="button" data-xp="prev">الشهر الماضي</button><button type="button" data-xp="all">كل البيانات</button><span class="muted" id="xpn"></span></div>
+    <p class="muted" style="margin:0 0 6px">فترة التقرير مستقلة عن فلتر مؤشرات الأداء.</p>
     <label class="pxrow pxall"><input type="checkbox" data-all> <b>كل الأقسام</b> <span class="muted">(${list.length} ملفات — ملف مستقل لكل قسم)</span></label>
     <div class="pxlist">${list.map((n,i)=>`<label class="pxrow"><input type="checkbox" data-d="${i}"> ${esc(n)}</label>`).join('')}</div>
     <div class="row"><button class="pri" data-ok type="button">تصدير</button><button data-no type="button">إلغاء</button></div>
   </div>`;
   const boxes=$$('[data-d]',o),all=$('[data-all]',o),ok=$('[data-ok]',o);
-  const sync=()=>{const n=boxes.filter(b=>b.checked).length;all.checked=n>0&&n===boxes.length;all.indeterminate=n>0&&n<boxes.length;ok.disabled=!n;
+  const xpv=()=>{const f=isoToSer($('#xpf',o).value),t=isoToSer($('#xpt',o).value);return (f&&t&&f<=t)?[f,t]:null;};
+  const sync=()=>{const n=boxes.filter(b=>b.checked).length,p=xpv();$('#xpn',o).textContent=p?((p[1]-p[0]+1)+' يوم'):'⚠ تاريخ غير صحيح';all.checked=n>0&&n===boxes.length;all.indeterminate=n>0&&n<boxes.length;ok.disabled=!n||!p;
     ok.textContent=!n?'اختر قسمًا':n===boxes.length?'تنزيل ملفات كل الأقسام ('+n+' ملفات)':n===1?'تنزيل شيت القسم المختار':'تنزيل '+n+' ملفات منفصلة';};
   const done=v=>{document.removeEventListener('keydown',kd);o.remove();resolve(v);};
   const kd=e=>{if(e.key==='Escape')done(null);};
   all.onchange=()=>{boxes.forEach(b=>b.checked=all.checked);sync();};
   boxes.forEach(b=>b.onchange=sync);
+  $('#xpf',o).onchange=$('#xpt',o).onchange=sync;
+  $$('[data-xp]',o).forEach(b=>b.onclick=()=>{let p;if(b.dataset.xp==='cur')p=xpMonth(0);else if(b.dataset.xp==='prev')p=xpMonth(-1);else{const ds=S.data.map(r=>r.day).filter(x=>x!=null);p=ds.length?[Math.min(...ds),Math.max(...ds)]:xpMonth(0);}$('#xpf',o).value=iso(p[0]);$('#xpt',o).value=iso(p[1]);sync();});
   document.addEventListener('keydown',kd);
   o.onclick=e=>{if(e.target===o)done(null);};
   $('[data-no]',o).onclick=()=>done(null);
-  ok.onclick=()=>done(boxes.filter(b=>b.checked).map(b=>list[+b.dataset.d]));
+  ok.onclick=()=>{const p=xpv();if(!p)return;done({sel:boxes.filter(b=>b.checked).map(b=>list[+b.dataset.d]),from:p[0],to:p[1]});};
   document.body.appendChild(o);sync();if(boxes[0])boxes[0].focus();
 });}
 async function exportReport(){
-  if(S.settings.selDay==null)return toast('لا توجد بيانات في هذا الشهر','warn');
+  if(!S.data.length)return toast('لا توجد بيانات','warn');
   const list=(S.depts||[]).slice();
   if(!list.length)return toast('لا توجد أقسام معرفة في إعدادات النظام','warn');
-  const selected=await pickReportDepts(list);if(!selected||!selected.length)return;
+  const pk=await pickReportDepts(list);if(!pk||!pk.sel.length)return;const selected=pk.sel;
+  if(!S.data.some(r=>r.day>=pk.from&&r.day<=pk.to&&!(r.x&&r.x.draft)))return toast('لا توجد بيانات في الفترة المختارة ('+iso(pk.from)+' → '+iso(pk.to)+')','warn');
   // كل قسم يُصدَّر في ملف Excel مستقل، حتى عند اختيار كل الأقسام.
   for(const dept of selected){
     const safe=String(dept).replace(/[\\\\/:*?"<>|]/g,'').trim()||'Department';
-    const name='Jvale_KPI_'+safe+'_'+iso(S.settings.selDay)+'.xlsx';
-    await saveFile(name,xlsxBlob(buildReport([dept])));
+    const name='Jvale_KPI_'+safe+'_'+iso(pk.from)+'_to_'+iso(pk.to)+'.xlsx';
+    await saveFile(name,xlsxBlob(buildReport([dept],pk.from,pk.to)));
   }
   toast('✔ تم تجهيز تنزيل '+selected.length+' ملف مستقل — ملف لكل قسم');
 }
