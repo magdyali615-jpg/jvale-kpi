@@ -2127,6 +2127,24 @@ new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});w
   const done=()=>{o.remove();try{localStorage.setItem(K,'1');}catch(e){}};o.querySelector('#ts').onclick=done;o.querySelector('#tn').onclick=()=>{o.remove();if(i<ST.length-1)window.__tour(i+1);else done();};};
  if(!seen)setTimeout(()=>{if(!document.querySelector('.modal'))window.__tour(0);},2500);
 })();
+/* ===== v4.1 auto-update: version check against version.json (no hard refresh needed) ===== */
+(function(){
+ const BUILD='v4.1-20261124100535';window.__BUILD=BUILD;
+ if(typeof HOSTED!=='undefined'&&HOSTED)return;
+ if(!/^https?:/.test(location.protocol))return;
+ let shown=false,hiddenAt=0,busy=false;
+ const base=location.pathname.replace(/[^\/]*$/,'');
+ async function remote(){try{const r=await fetch(base+'version.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return null;const j=await r.json();return j&&j.build?String(j.build):null;}catch(e){return null;}}
+ function go(){try{const u=new URL(location.href);u.searchParams.set('v',Date.now().toString(36));location.replace(u.toString());}catch(e){location.reload();}}
+ function banner(v){if(shown)return;shown=true;const d=document.createElement('div');d.id='updbar';d.style.cssText='position:fixed;bottom:16px;inset-inline:16px;max-width:520px;margin:0 auto;z-index:99999;background:#143a5c;color:#fff;border-radius:12px;padding:12px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between;box-shadow:0 8px 28px rgba(0,0,0,.35);font-size:14px';d.innerHTML='<span>↻ فيه تحديث جديد للموقع</span><span style="display:flex;gap:8px"><button id="updgo" style="background:#fff;color:#143a5c;border:0;border-radius:8px;padding:8px 14px;font:inherit;font-weight:700;cursor:pointer">حدّث الآن</button><button id="updx" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer">لاحقًا</button></span>';document.body.appendChild(d);
+  document.getElementById('updgo').onclick=go;document.getElementById('updx').onclick=()=>{d.remove();setTimeout(()=>{shown=false;},10*60*1000);};}
+ async function check(auto){if(busy)return;busy=true;try{const v=await remote();if(v&&v!==BUILD){/* saved edits live in localStorage, so a reload is safe */if(auto&&!document.querySelector('.modal'))return go();banner(v);}}finally{busy=false;}}
+ setTimeout(()=>check(false),4000);
+ setInterval(()=>{if(!document.hidden)check(false);},5*60*1000);
+ document.addEventListener('visibilitychange',()=>{if(document.hidden){hiddenAt=Date.now();return;}if(hiddenAt&&Date.now()-hiddenAt>2*60*1000)check(true);else check(false);});
+ /* tidy the ?v= cache-buster out of the address bar */
+ try{const u=new URL(location.href);if(u.searchParams.has('v')){u.searchParams.delete('v');history.replaceState(null,'',u.pathname+(u.search||'')+u.hash);}}catch(e){}
+})();
 
 render();pill();if(HOSTED)cloudInit();else if(GHC)ghInit();else initFile();});
 })();
