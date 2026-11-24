@@ -2226,16 +2226,16 @@ new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});w
  /* parse recognised text into rows: [code] [product with bracket code] [shortage] [S-order] [client] */
  function parseOcr(text){const rows=[],bad=[],cnt=new Map();const AR=/[\u0600-\u06FF]/;
   String(text||'').split(/\n/).map(fixLine).filter(Boolean).forEach(ln=>{
-   const m=/^(\d{2,6})\s+(.+)\s+(-?\s?\d{1,5})\s+([A-Za-z0-9$]{1,8})\s*(.*)$/.exec(ln);
-   if(!m||!/\[[^\]]*\d{3,6}\]/.test(m[2])){if(/\[|\d{4,}/.test(ln)&&!/code-n|product_id/i.test(ln))bad.push(ln);return;}
-   let name=m[2].replace(/[\u200e\u200f\u202a-\u202e]/g,''),qty=Math.abs(parseInt(m[3].replace(/\s/g,''),10)),tok=m[4].replace(/^[$5s]/i,'S'),client=(m[5]||'');
+   const R1=/^(?:(\d{2,6})\s+)?(.+?)\s+([-\u2212\u2013\u201c\u201d"~]?\s?\d{1,5})\s+([A-Za-z$5]?\d{4,6})\s*(.*)$/,R2=/^(?:(\d{2,6})\s+)?(.+?)\s+([-\u2212\u2013\u201c\u201d"~]?\s?\d{1,5})\s+([A-Za-z$5]?\d{2,6})\s*(.*)$/,R3=/^(?:(\d{2,6})\s+)?(.+)\s+([-\u2212\u2013\u201c\u201d"~]?\s?\d{1,5})\s+([^\s\d\x00-\x7f]{1,8})\s*(.*)$/;const m=R1.exec(ln)||R2.exec(ln)||R3.exec(ln);
+   if(!m||!/[\[\(I][^\]\)\}]*\d{3,6}[\]\)\}]/.test(m[2])){if(/\[|\d{4,}/.test(ln)&&!/code-n|product_id/i.test(ln))bad.push(ln);return;}
+   let name=m[2].replace(/[\u200e\u200f\u202a-\u202e]/g,''),qty=Math.abs(parseInt(m[3].replace(/[^\d]/g,''),10)),tok=m[4].replace(/^[$5s]/i,'S'),client=(m[5]||'');
    if(AR.test(tok)){client=tok+' '+client;tok='';}
    name=name.replace(/\b([HLDWM]\d{0,4}[O]\d{0,4})\b/g,(x)=>x.replace(/O/g,'0'));
-   const br=/\[([^\]]*?)-(\d{3,6})\]/.exec(name),codeIn=br?br[2]:'',w=[];let code=m[1];
+   const br=/[\[\(I]([^\]\)\}]*?)-(\d{3,6})[\]\)\}]/.exec(name),codeIn=br?br[2]:'',w=[];let code=m[1]||codeIn;
    if(codeIn&&codeIn!==code){w.push('الكود اتصحح من الاسم ('+code+' ← '+codeIn+')');code=codeIn;}
    if((name.match(/\[/g)||[]).length!==(name.match(/\]/g)||[]).length||AR.test(name))w.push('الاسم فيه حروف مش واضحة — قارنه بالصورة');
    const okOrd=/^S\d{5}$/.test(tok);if(okOrd)cnt.set(tok,(cnt.get(tok)||0)+1);
-   rows.push({code,name:name.trim(),q:qty,order:okOrd?tok:'',client:client.replace(/[A-Za-z0-9\[\]\|_.,:;'"`~!@#$%^&*()+=<>?\\\/-]/g,' ').replace(/\s+/g,' ').trim(),chk:false,w});});
+   rows.push({code,name:name.trim(),q:qty,order:okOrd?tok:'',client:(AR.test(client)?client.replace(/[A-Za-z0-9\[\]\|_.,:;'"`~!@#$%^&*()+=<>?\\\/-]/g,' '):client.replace(/[^A-Za-z0-9 .&-]/g,' ')).replace(/\s+/g,' ').trim(),chk:false,w});});
   const top=[...cnt.entries()].sort((a,b)=>b[1]-a[1])[0];
   rows.forEach(r=>{if(!r.order&&top){r.order=top[0];r.w.push('رقم الأوردر اتملّى من باقي الصفوف');}r.warn=r.w.join(' — ');});
   return {rows,bad};}
@@ -2322,7 +2322,7 @@ new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});w
 })();
 /* ===== v4.1 auto-update: version check against version.json (no hard refresh needed) ===== */
 (function(){
- const BUILD='v5c-20261124110856';window.__BUILD=BUILD;
+ const BUILD='v5d-20261124114343';window.__BUILD=BUILD;
  if(typeof HOSTED!=='undefined'&&HOSTED)return;
  if(!/^https?:/.test(location.protocol))return;
  let shown=false,hiddenAt=0,busy=false;
