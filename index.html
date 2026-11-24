@@ -14,7 +14,7 @@ h3{margin:0 0 12px;font-size:16px;font-weight:700;color:var(--pri);padding-inlin
 .row,.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}.row label{color:var(--mut);font-size:13px}.bar{padding:8px 0}.muted{color:var(--mut)}
 input,select,textarea,button{font:inherit;color:inherit}input,select,textarea{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px;min-height:34px}input:focus,select:focus,textarea:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:var(--acc)}textarea{width:100%}
 button{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 14px;cursor:pointer;transition:border-color .15s,background .15s}button:hover{border-color:var(--acc);background:var(--soft)}
-button.pri{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}button.pri:hover{filter:brightness(1.08);background:var(--acc)}button.del{color:var(--bad)}button:disabled{opacity:.45;cursor:default}button.mini{font-size:12px;padding:1px 10px;margin-inline-start:8px}
+button.pri{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}button.pri:hover{filter:brightness(1.08);background:var(--acc)}button.del{color:var(--bad)}button:disabled{opacity:.45;cursor:default}.mo{display:inline-flex;gap:5px;align-items:center;padding:4px 10px;border:1px solid var(--line,#cbd5e1);border-radius:999px;cursor:pointer}button.mini{font-size:12px;padding:1px 10px;margin-inline-start:8px}
 .tw{overflow:auto;max-width:100%;max-height:72vh;border:1px solid var(--line);border-radius:10px}table.kt{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
 .kt th{background:var(--pri);color:#fff;padding:9px 10px;font-weight:600;text-align:center;position:sticky;top:0;z-index:1;border-bottom:1px solid rgba(255,255,255,.2)}@media(prefers-color-scheme:dark){.kt th{color:#0e141b}}
 .kt td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:center}.kt td.dn{text-align:right;font-weight:600;white-space:nowrap}.kt tbody tr:nth-child(even){background:var(--soft)}.kt tbody tr:hover{background:rgba(27,108,168,.09)}
@@ -219,7 +219,12 @@ function compute(S){
   }
   const mapIdx=new Map(), dup=new Set();
   S.map.forEach((m,i)=>{const n=norm(m.name); if(!n) return; if(mapIdx.has(n)) dup.add(n); else mapIdx.set(n,i);});
-  const start=st.monthStart, eom=eomonth(start), days=[]; for(let d=start; d<=Math.min(start+30,eom); d++) days.push(d);
+  const start=st.monthStart, eom=eomonth(start);               // eom stays = end of monthStart's month (other tabs)
+  let pFrom=st.kpiFrom!=null?st.kpiFrom:start, pTo=st.kpiTo!=null?st.kpiTo:eom;   // no kpiFrom/kpiTo → old behaviour
+  if(pTo<pFrom)pTo=pFrom; if(pTo-pFrom>365)pTo=pFrom+365;
+  const days=[]; for(let d=pFrom; d<=pTo; d++) days.push(d);
+  const pIsMonth=serToDate(pFrom).getUTCDate()===1&&pTo===eomonth(pFrom);
+  const pLabel=pIsMonth?serToISO(pFrom).slice(0,7):serToISO(pFrom)+' → '+serToISO(pTo);
   const off=new Set(S.daysOff||[]), wk=new Set(Array.isArray(st.weekOff)?st.weekOff:[5,6]); const thr=Math.max(1,st.thr||1);
   const exl=(S.excl||[]).filter(e=>e.wc).map(e=>({w:norm(e.wc),lo:e.from==null?-1e9:e.from,hi:(e.from==null&&e.to==null)?1e9:(e.to==null?e.from:e.to)}));
   const theo=+st.theo||0, kw=norm(st.kw), frRule=st.frOn&&kw!=='';
@@ -254,9 +259,9 @@ function compute(S){
   const monthTable=()=>{const o=agg(r=>true);return depts.map(dp=>Object.assign({dept:dp},fin(o[dp])));};
   const log=[]; for(const d of validDays){const o=agg(r=>r.day===d); for(const dp of depts) log.push(Object.assign({day:d,dept:dp},fin(o[dp])));}
   const unmapped=[...names.entries()].filter(([k])=>!mapIdx.has(k)).map(([k,v])=>v);
-  let rowsMonth=0,rowsMapped=0; for(const r of S.data){ if(r.day>=start&&r.day<=eom){rowsMonth++; if(mapIdx.has(norm(r.wc))) rowsMapped++;} }
+  let rowsMonth=0,rowsMapped=0; for(const r of S.data){ if(r.day>=pFrom&&r.day<=pTo){rowsMonth++; if(mapIdx.has(norm(r.wc))) rowsMapped++;} }
   return {days,validDays,recs,dayTable,monthTable,log,unmapped,rowsMonth,rowsMapped,dup:[...dup],
-    autoList:recs.filter(r=>r.auto),exList:recs.filter(r=>r.noKpi&&r.hasRows),nameInfo:names,mapIdx,eom,dayCount};
+    autoList:recs.filter(r=>r.auto),exList:recs.filter(r=>r.noKpi&&r.hasRows),nameInfo:names,mapIdx,eom,dayCount,pFrom,pTo,pIsMonth,pLabel,pWord:pIsMonth?'الشهر':'الفترة'};
 }
 const api={compute,norm,round1,serToISO,isoToSer,serToDate,eomonth};
 if(typeof module!=='undefined') module.exports=api; else root.KPI=api;
@@ -322,19 +327,30 @@ function health(){const items=[];
   const nodept=S.map.filter(m=>m.name&&!m.dept).length; if(nodept) items.push(`⚠ ${nodept} مركز عمل بدون قسم في الخريطة`);
   return items;}
 /* ================= views ================= */
+const mser=(y,m)=>Math.round(Date.UTC(y,m,1)/86400000)+25569;
+function setPeriod(f,t){if(f==null||t==null)return;if(t<f)[f,t]=[t,f];if(t-f>365){f=t-365;toast('الحد الأقصى للفترة 366 يوم — تم اختصارها','warn');}
+  const st=S.settings;st.kpiFrom=f;st.kpiTo=t;if(st.selDay!=null&&(st.selDay<f||st.selDay>t))st.selDay=null;save();render();}
+function kpiChips(){const n=new Date(),td=Math.round(Date.UTC(n.getFullYear(),n.getMonth(),n.getDate())/86400000)+25569,ds=[...R.dayCount.keys()],mn=ds.length?Math.min(...ds):td,mx=ds.length?Math.max(...ds):td,
+  m0=isoToSer(iso(td).slice(0,7)+'-01'),pm=isoToSer(iso(m0-1).slice(0,7)+'-01');
+  return [['cur','هذا الشهر',m0,K.eomonth(m0)],['prev','الشهر الماضي',pm,K.eomonth(pm)],['l7','آخر 7 أيام',mx-6,mx],['l30','آخر 30 يوم',mx-29,mx],['all','كل البيانات',mn,mx]];}
+function kpiBar(){const f=R.pFrom,t=R.pTo;
+  return `<div class="card hotc"><div class="row"><label>الفترة</label><button id="pmp" title="الشهر السابق">◀</button><input type="month" id="pmo" value="${iso(f).slice(0,7)}"><button id="pmn" title="الشهر التالي">▶</button>
+   <span class="seg" style="margin:0;display:inline-flex;gap:6px">${kpiChips().map(c=>`<button type="button" data-pc="${c[2]},${c[3]}" class="${c[2]===f&&c[3]===t?'pri':''}">${c[1]}</button>`).join('')}</span>
+   <label>من</label><input type="date" id="pf" value="${iso(f)}"><label>إلى</label><input type="date" id="pt" value="${iso(t)}"></div>
+   <p class="muted" style="margin:4px 0 0">${R.pIsMonth?'شهر كامل':'فترة مخصصة'}: ${LT(iso(f))} → ${LT(iso(t))} (${t-f+1} يوم)</p></div>`;}
 function viewKpi(){
   const st=S.settings, d=st.selDay, i=R.validDays.indexOf(d);
   const opts=R.validDays.map(x=>`<option value="${x}" ${x===d?'selected':''}>${iso(x)}</option>`).join('');
   const hs=health();
-  let h=`<div class="card"><div class="row"><label>اليوم المطلوب إدخاله</label>
+  let h=kpiBar()+`<div class="card"><div class="row"><label>اليوم المطلوب إدخاله</label>
    <button id="prev" ${i<=0?'disabled':''}>◀</button><select id="selDay">${opts}</select><button id="next" ${i<0||i>=R.validDays.length-1?'disabled':''}>▶</button>
-   <label>أول يوم في الشهر</label><input type="date" id="mstart" value="${iso(st.monthStart)}">
+   <label title="تستخدمه التبويبات الأخرى. لا يغيّر فترة المؤشرات إذا حددتها">أول يوم في الشهر (للتبويبات الأخرى)</label><input type="date" id="mstart" value="${iso(st.monthStart)}">
    <label>دقائق الوردية</label><input type="number" id="shift" value="${st.shift}" style="width:80px">
-   <span class="muted">${R.validDays.length} يوم عليه بيانات في الشهر</span></div>
+   <span class="muted">${R.validDays.length} يوم عليه بيانات في ${R.pWord}</span></div>
    <div class="hs ${hs.length?'warn':'ok'}">${hs.length?hs.map(esc).join('<br>'):'✔ سليم — كل الأسماء مربوطة والفحوصات سليمة'}</div></div>`;
-  if(d==null) return h+'<div class="card">لا توجد بيانات في هذا الشهر. افتح تبويب "البيانات" واستورد ملف.</div>';
+  if(d==null) return h+'<div class="card">لا توجد بيانات في '+(R.pWord==='الشهر'?'هذا الشهر':'هذه الفترة')+'. افتح تبويب "البيانات" واستورد ملف.</div>';
   h+=viewDash(d);h+=`<div class="card"><h3>① بيانات اليوم المختار — ${LT(iso(d))} (انسخها في جدول الإدخال اليومي)</h3>${copyBar()}${kpiTable(R.dayTable(d),'t1')}</div>`;
-  h+=`<details class="card"><summary><b>تراكمي الشهر بطريقة الإكسل (المجموع ÷ المجموع) — للمرجع</b></summary><div class="bar"><button data-cpm="all">نسخ الجدول</button></div>${kpiTable(R.monthTable(),'t2')}</details>`;
+  h+=`<details class="card"><summary><b>تراكمي ${R.pWord} بطريقة الإكسل (المجموع ÷ المجموع) — للمرجع</b></summary><div class="bar"><button data-cpm="all">نسخ الجدول</button></div>${kpiTable(R.monthTable(),'t2')}</details>`;
   h+=viewMonth();
   const ex=R.exList.filter(r=>r.day===d), au=R.autoList.filter(r=>r.day===d&&!r.noKpi);
   h+=`<div class="grid2"><div class="card"><h3>ماكينات لها بيانات اليوم وخارج حساب المؤشرات (${ex.length})</h3>${ex.length?`<ul class="lst">${ex.map(r=>`<li><b>${esc(r.wc)}</b> <span class="muted">${esc(r.dept)} — ${esc(r.reason)}</span></li>`).join('')}</ul>`:'<p class="muted">لا يوجد</p>'}</div>
@@ -346,8 +362,16 @@ function bindKpi(){if(S.settings.selDay!=null)bindDash();bindMonth();
   $('#next').onclick=()=>{const i=R.validDays.indexOf(S.settings.selDay);if(i<R.validDays.length-1){S.settings.selDay=R.validDays[i+1];save();render();}};
   $('#mstart').onchange=e=>{const v=isoToSer(e.target.value);if(v){S.settings.monthStart=v;save();render();}};
   $('#shift').onchange=e=>{const v=+e.target.value;if(v>0){S.settings.shift=v;save();render();}};
+  const sh=k=>{const d=K.serToDate(R.pFrom),a=mser(d.getUTCFullYear(),d.getUTCMonth()+k);setPeriod(a,K.eomonth(a));};
+  $('#pmp').onclick=()=>sh(-1);$('#pmn').onclick=()=>sh(1);
+  $('#pmo').onchange=e=>{const a=isoToSer(e.target.value+'-01');if(a)setPeriod(a,K.eomonth(a));};
+  $$('[data-pc]').forEach(b=>b.onclick=()=>{const [f,t]=b.dataset.pc.split(',').map(Number);setPeriod(f,t);});
+  $('#pf').onchange=$('#pt').onchange=()=>{const f=isoToSer($('#pf').value),t=isoToSer($('#pt').value);if(f&&t)setPeriod(f,t);};
   if(S.settings.selDay!=null){bindCopy($('#view'),()=>R.dayTable(S.settings.selDay),false);
     const bm=$('[data-cpm]');if(bm)bm.onclick=()=>copy(tsvRows(R.monthTable(),KP.all),'تراكمي الشهر');}}
+async function portalPeriodOk(){const a=iso(R.pFrom).slice(0,7),b=iso(R.pTo).slice(0,7);
+  return a===b||await ask(`الفترة (${iso(R.pFrom)} → ${iso(R.pTo)}) تمتد على أكثر من شهر، والبوابة تتوقع شهرًا واحدًا (سيُسمّى الملف ${a}). هل تريد المتابعة؟`,'نعم، تابع');}
+// first line of exportPortal (make it async): if(!await portalPeriodOk())return;
 /* ---------- Monthly KPIs: factory total / department / work center (same method as the management portal) ---------- */
 const MT={method:'avg',basis:'val',col:new Set()},TGM={u:.85,p:1,a:1};
 const mtMean=a=>{a=a.filter(v=>v!=null);return a.length?a.reduce((s,v)=>s+v,0)/a.length:null;};
@@ -363,10 +387,10 @@ function mtCalc(method){const mt=R.monthTable(),avg=method==='avg',ach=MT.basis=
   const mk=(use)=>{if(avg){const f=k=>{const a=depts.map(d=>d[k]==null?null:(use?d[k]/TGM[k]:d[k])).filter(v=>v!=null);return [mtMean(a),a.length];};const [u,nu]=f('u'),[p,np]=f('p'),[a,na]=f('a');return {u,p,a,nu,np,na,n:live.length};}
     const t=dbAgg(R.log);return {u:t.u,p:t.p,a:t.a,nu:live.length,np:live.length,na:live.length,n:live.length};};
   const plantV=mk(false),plant=ach&&avg?mk(true):plantV;
-  return {avg,ach:ach&&avg,depts,plant,plantV,per:iso(S.settings.monthStart).slice(0,7),
-    note:avg?'قيمة كل قسم = مجموع الأرقام اليومية (البسط) ÷ مجموع المقامات اليومية لأيام الشهر — كما تُدخلها في جدول البوابة اليومي — وإجمالي المصنع = متوسط قيم الأقسام (كل قسم بنفس الوزن، من غير ترجيح بالكمية أو الزمن).'+(ach?' المعروض هنا متوسط نسب الإنجاز (القيمة ÷ المستهدف).':''):'قيمة كل قسم وإجمالي المصنع = مجموع البسط ÷ مجموع المقام لكل الشهر (طريقة الإكسل). مراكز العمل المعلّمة «خارج المؤشرات» غير داخلة هنا.'};}
+  return {avg,ach:ach&&avg,depts,plant,plantV,per:R.pLabel,
+    note:avg?'قيمة كل قسم = مجموع الأرقام اليومية (البسط) ÷ مجموع المقامات اليومية لأيام '+R.pWord+' — كما تُدخلها في جدول البوابة اليومي — وإجمالي المصنع = متوسط قيم الأقسام (كل قسم بنفس الوزن، من غير ترجيح بالكمية أو الزمن).'+(ach?' المعروض هنا متوسط نسب الإنجاز (القيمة ÷ المستهدف).':''):'قيمة كل قسم وإجمالي المصنع = مجموع البسط ÷ مجموع المقام لكل '+R.pWord+' (طريقة الإكسل). مراكز العمل المعلّمة «خارج المؤشرات» غير داخلة هنا.'};}
 /* ---------- export: source workbook for uploading each department's daily table to the management portal ---------- */
-function buildPortalWb(sel,withSum){const pick=n=>!sel||sel.has(n),wantSum=withSum!==false;const per=iso(S.settings.monthStart).slice(0,7),r1=v=>Math.round((+v||0)*10)/10,wb=XLSX.utils.book_new();wb.Workbook={Views:[{RTL:true}]};
+function buildPortalWb(sel,withSum){const pick=n=>!sel||sel.has(n),wantSum=withSum!==false;const per=iso(R.pFrom).slice(0,7),r1=v=>Math.round((+v||0)*10)/10,wb=XLSX.utils.book_new();wb.Workbook={Views:[{RTL:true}]};
   const byDept=new Map(),cnt=new Map();
   R.log.forEach(r=>{if(!(r.plan>0))return;let a=byDept.get(r.dept);if(!a)byDept.set(r.dept,a=[]);a.push(r);});
   R.recs.forEach(r=>{if(!(r.plan>0)||r.noKpi)return;const k=r.dept+'|'+r.day;let c=cnt.get(k);if(!c)cnt.set(k,c={n:0,au:0});c.n++;if(r.auto)c.au++;});
@@ -420,14 +444,14 @@ function pickPortalDepts(list,per){return new Promise(res=>{
   $('[data-no]',o).onclick=()=>done(null);
   ok.onclick=()=>done({sel:new Set(boxes.filter(b=>b.checked).map(b=>list[+b.dataset.d])),all:boxes.every(b=>b.checked),sum:sum.checked});
   document.body.appendChild(o);sync();if(boxes[0])boxes[0].focus();});}
-async function exportPortal(){if(!R.validDays.length){toast('لا توجد بيانات في الشهر المحدد','warn');return;}
+async function exportPortal(){if(!await portalPeriodOk())return;if(!R.validDays.length){toast('لا توجد بيانات في الفترة المحددة','warn');return;}
   const list=portalDepts();if(!list.length){toast('لا توجد أقسام لها بيانات في هذا الشهر','warn');return;}
-  const per=iso(S.settings.monthStart).slice(0,7),c=await pickPortalDepts(list,per);if(!c)return;
+  const per=iso(R.pFrom).slice(0,7),c=await pickPortalDepts(list,per);if(!c)return;
   const safe=s=>String(s).replace(/[\\\/:*?"<>|]/g,'').trim()||'dept';
   const nm=c.all?'KPI_Portal_Upload_'+per:c.sel.size===1?'KPI_Portal_'+safe([...c.sel][0])+'_'+per:'KPI_Portal_Upload_'+per+'_'+c.sel.size+'_depts';
   saveXlsx(buildPortalWb(c.sel,c.sum),nm+'.xlsx');
   toast('✔ تم تنزيل '+(c.all?'كل الأقسام ('+c.sel.size+' شيت)':c.sel.size===1?'شيت القسم: '+[...c.sel][0]:c.sel.size+' أقسام'));}
-function viewMonth(){if(!R.validDays.length)return '';return `<div class="card hotc"><h3>② مؤشرات الشهر — إجمالي المصنع وكل قسم وكل مركز عمل</h3>
+function viewMonth(){if(!R.validDays.length)return '';return `<div class="card hotc"><h3>② مؤشرات ${R.pWord} — إجمالي المصنع وكل قسم وكل مركز عمل</h3>
   <div class="row"><label>طريقة الحساب</label><select id="mtm"><option value="avg">وفق البوابة: القسم = مجموع÷مجموع، والمصنع = متوسط الأقسام</option><option value="ratio">مجموع ÷ مجموع للمصنع كله (وفق الإكسل)</option></select><label>يُحسب متوسط الأقسام من</label><select id="mtb"><option value="val">القيم الفعلية للأقسام</option><option value="ach">نسب إنجاز الأقسام (القيمة ÷ المستهدف)</option></select><button id="mtc1" type="button">نسخ إجمالي المصنع</button><button id="mtc2" type="button">نسخ الأقسام</button><button id="mtc3" type="button">نسخ كل مراكز العمل</button><button id="mtxp" type="button" class="pri" title="اختر قسمًا أو أكثر أو كل الأقسام ثم نزّل شيتاتها">ملف الرفع للبوابة (Excel) ▾</button><button id="mtfo" type="button">طيّ الأقسام</button><button id="mtun" type="button">فتح الأقسام</button></div>
   <p class="muted" id="mtnote"></p><div id="mtbox"></div></div>`;}
 function drawMonth(){const box=$('#mtbox');if(!box)return;const C=mtCalc(MT.method),pc1=v=>v==null?'':(Math.round(v*1000)/10).toFixed(1);$('#mtnote').textContent=C.note;$('#mtb').disabled=!C.avg;
@@ -519,7 +543,7 @@ const DB={hide:new Set(),scope:'month'},KP3=[['u','استغلال الطاقة',
 const pcs=v=>v==null?'—':(Math.round(v*1000)/10).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
 function dbAgg(rows){const t={qty:0,cap:0,ideal:0,run:0,plan:0};rows.forEach(r=>{t.qty+=r.qty;t.cap+=r.cap;t.ideal+=r.ideal;t.run+=r.run;t.plan+=r.plan;});return Object.assign(t,{u:t.cap?t.qty/t.cap:null,p:t.run?t.ideal/t.run:null,a:t.plan?t.run/t.plan:null});}
 function dbSeries(){const g=new Map();R.log.forEach(r=>{let a=g.get(r.day);if(!a){a=[];g.set(r.day,a);}a.push(r);});return R.validDays.map(d=>Object.assign({d},dbAgg(g.get(d)||[])));}
-function viewDash(d){const ser=dbSeries(),i=ser.findIndex(x=>x.d===d);if(i<0)return '';const month=DB.scope==='month',MC=month?mtCalc(MT.method):null,cur=month?MC.plantV:ser[i],prev=month?null:(i>0?ser[i-1]:null),C=2*Math.PI*42,cnt=k=>month?MC.plantV['n'+k]:R.dayTable(d).filter(r=>r[k]!=null).length,scopeTxt=month?'إجمالي الشهر '+MC.per:'يوم '+iso(d),methTxt=k=>MT.method==='avg'?'متوسط '+cnt(k)+' قسم':'مجموع ÷ مجموع';
+function viewDash(d){const ser=dbSeries(),i=ser.findIndex(x=>x.d===d);if(i<0)return '';const month=DB.scope==='month',MC=month?mtCalc(MT.method):null,cur=month?MC.plantV:ser[i],prev=month?null:(i>0?ser[i-1]:null),C=2*Math.PI*42,cnt=k=>month?MC.plantV['n'+k]:R.dayTable(d).filter(r=>r[k]!=null).length,scopeTxt=month?'إجمالي '+R.pWord+' '+MC.per:'يوم '+iso(d),methTxt=k=>MT.method==='avg'?'متوسط '+cnt(k)+' قسم':'مجموع ÷ مجموع';
   const ring=([k,t,tg,col])=>{const v=cur[k],pv=prev?prev[k]:null,ok=v!=null&&v>=tg-1e-9,dl=(v!=null&&pv!=null)?(v-pv)*100:null,a=tg*2*Math.PI;
     const tick=tg<1?`<line x1="${50+36*Math.cos(a)}" y1="${50+36*Math.sin(a)}" x2="${50+48*Math.cos(a)}" y2="${50+48*Math.sin(a)}" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round"/>`:'';
     return `<div class="ring-card" style="--rc:${col}"><div class="ring"><svg viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="42" fill="none" stroke-width="9"/><circle class="fg" data-f="${v==null?0:Math.min(v,1)}" cx="50" cy="50" r="42" fill="none" stroke="${ok?'var(--good)':'var(--bad)'}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C}"/>${tick}</svg><div class="rv ${ok?'good':'bad'}" ${v==null?'':`data-cu="${v*100}"`}>${pcs(v)}</div></div>
@@ -528,16 +552,16 @@ function viewDash(d){const ser=dbSeries(),i=ser.findIndex(x=>x.d===d);if(i<0)ret
   const tile=(n,l,go)=>`<div class="tile ${go?'act':''}" ${go?`data-go="${go}" tabindex="0"`:''}><b>${n}</b><span>${l}</span></div>`;
   const legend=KP3.map(([k,t,,col])=>`<span class="lgd ${DB.hide.has(k)?'off':''}" data-lg="${k}"><i style="background:${col}"></i>${t}</span>`).join('');
   const dep=R.dayTable(d).map(r=>`<div class="dcard"><div class="dn">${esc(r.dept)}</div>${KP3.map(([k,t,tg,col])=>{const v=r[k],ok=v!=null&&v>=tg-1e-9;return `<div class="mb"><span>${t}</span><span class="tr"><i style="width:${v==null?0:Math.min(v,1)*100}%;background:${ok?'var(--good)':'var(--bad)'}"></i>${tg<1?`<s class="tg" style="inset-inline-start:${tg*100}%"></s>`:''}</span><b class="${ok?'good':'bad'}">${pcs(v)}</b></div>`;}).join('')}</div>`).join('');
-  const ctl=`<div class="row dashc"><label>الحلقات تعرض</label><span class="seg"><button type="button" class="${month?'pri':''}" data-sc="month">إجمالي الشهر</button><button type="button" class="${month?'':'pri'}" data-sc="day">اليوم المختار</button></span><label>حساب المصنع</label><select id="dbm"><option value="avg">متوسط الأقسام (وفق البوابة)</option><option value="ratio">مجموع ÷ مجموع للمصنع كله</option></select></div>`;
+  const ctl=`<div class="row dashc"><label>الحلقات تعرض</label><span class="seg"><button type="button" class="${month?'pri':''}" data-sc="month">إجمالي ${R.pWord}</button><button type="button" class="${month?'':'pri'}" data-sc="day">اليوم المختار</button></span><label>حساب المصنع</label><select id="dbm"><option value="avg">متوسط الأقسام (وفق البوابة)</option><option value="ratio">مجموع ÷ مجموع للمصنع كله</option></select></div>`;
   return ctl+`<div class="dash">${KP3.map(ring).join('')}</div>
    <div class="trk-sum">${tile(day.length,'ماكينة محسوبة اليوم')}${tile(au,'احتُسبت متوقفة تلقائيًا')}${tile(d2(stopH),'ساعات التوقف اليوم — افتح التفاصيل','dt')}${tile(nrow,'صف مسجّل اليوم — افتح الإدخال','entry')}</div>
-   <div class="card"><h3>اتجاه المؤشرات خلال الشهر <span class="muted">— مرّر للتفاصيل، واضغط على أي يوم لاختياره</span></h3><div class="row">${legend}</div><div class="chart" id="trendw"><div id="trend"></div><div class="tip" id="tip" hidden></div></div></div>
+   <div class="card"><h3>اتجاه المؤشرات خلال ${R.pWord} <span class="muted">— مرّر للتفاصيل، واضغط على أي يوم لاختياره</span></h3><div class="row">${legend}</div><div class="chart" id="trendw"><div id="trend"></div><div class="tip" id="tip" hidden></div></div></div>
    <div class="card"><h3>أداء الأقسام — ${LT(iso(d))}</h3><div class="dpt">${dep}</div></div>`;}
 function drawTrend(){const ser=dbSeries(),box=$('#trend');if(!box)return;const d0=S.settings.selDay,n=ser.length;if(!n){box.innerHTML='<p class="muted">لا يوجد بيانات</p>';return;}
   const W=900,H=260,L=14,Rr=W-52,T=14,B=30,step=n>1?(Rr-L)/(n-1):0,X=i=>n>1?Rr-i*step:(L+Rr)/2,Y=v=>T+(H-T-B)*(1-Math.min(Math.max(v,0),1.3)/1.3),sel=ser.findIndex(s=>s.d===d0);
   let g='';[0,.25,.5,.75,1].forEach(v=>{g+=`<line x1="${L}" x2="${Rr+8}" y1="${Y(v)}" y2="${Y(v)}" class="gl"/><text x="${W-4}" y="${Y(v)+4}" class="gt" text-anchor="end">${v*100}%</text>`;});
   [[.85,'#1c6fb5'],[1,'#64748b']].forEach(([v,c])=>{g+=`<line x1="${L}" x2="${Rr+8}" y1="${Y(v)}" y2="${Y(v)}" stroke="${c}" stroke-dasharray="5 4" stroke-width="1.2" opacity=".55"/>`;});
-  const every=Math.max(1,Math.ceil(n/16));ser.forEach((s,i)=>{if(i%every===0||i===n-1)g+=`<text x="${X(i)}" y="${H-10}" class="gt" text-anchor="middle">${+iso(s.d).slice(8)}</text>`;});
+  const every=Math.max(1,Math.ceil(n/16));ser.forEach((s,i)=>{if(i%every===0||i===n-1)g+=`<text x="${X(i)}" y="${H-10}" class="gt" text-anchor="middle">${+iso(s.d).slice(n>31?5:8)}</text>`;});
   if(sel>=0)g+=`<rect x="${X(sel)-Math.max(step,24)/2}" y="${T}" width="${Math.max(step,24)}" height="${H-T-B}" fill="var(--acc)" opacity=".1" rx="6"/>`;
   KP3.forEach(([k,,,col])=>{if(DB.hide.has(k))return;const pts=ser.map((s,i)=>s[k]==null?null:[X(i),Y(s[k])]).filter(Boolean);if(!pts.length)return;
     g+=`<path d="${pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`+pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.2" fill="var(--card)" stroke="${col}" stroke-width="2"/>`).join('');});
@@ -747,8 +771,9 @@ const dser=(y,m,d)=>{if(m<1||m>12||d<1||d>31)return null;const t=Date.UTC(y,m-1,
 const SLASH=/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/;
 function detectOrder(vals){let aBig=false,bBig=false;const list=[];for(const v of vals){if(typeof v!=='string')continue;const m=SLASH.exec(v.trim());if(!m)continue;list.push(m);if(+m[1]>12)aBig=true;if(+m[2]>12)bBig=true;}
   if(!list.length)return 'dmy';if(aBig&&!bBig)return 'dmy';if(bBig&&!aBig)return 'mdy';
-  const ms=S.settings.monthStart||0,sc=o=>list.filter(m=>{const d=o==='mdy'?dser(+m[3],+m[1],+m[2]):dser(+m[3],+m[2],+m[1]);return d!=null&&d>=ms-31&&d<=ms+62;}).length;
-  return sc('mdy')>=sc('dmy')?'mdy':'dmy';}
+  const ds=S.data.map(r=>r.day).filter(x=>x!=null);if(!ds.length)return 'dmy';let lo=1e9,hi=-1e9;ds.forEach(x=>{if(x<lo)lo=x;if(x>hi)hi=x;});
+  const sc=o=>list.filter(m=>{const d=o==='mdy'?dser(+m[3],+m[1],+m[2]):dser(+m[3],+m[2],+m[1]);return d!=null&&d>=lo-62&&d<=hi+62;}).length;
+  return sc('mdy')>sc('dmy')?'mdy':'dmy';}
 function toSer(v,order){if(v==null||v==='')return null;if(typeof v==='number')return v>20000&&v<80000?Math.floor(v):null;if(v instanceof Date)return Math.round(Date.UTC(v.getFullYear(),v.getMonth(),v.getDate())/86400000)+25569;
   const s=String(v).trim();let m=/^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);if(m)return dser(+m[1],+m[2],+m[3]);
   m=SLASH.exec(s);if(m)return order==='mdy'?dser(+m[3],+m[1],+m[2]):dser(+m[3],+m[2],+m[1]);return null;}
@@ -779,32 +804,53 @@ function readFile(f){const rd=new FileReader();const isJson=/\.json$/i.test(f.na
     const wb=XLSX.read(rd.result,{type:'array'});
     if(wb.Sheets['KPI Map']&&wb.Sheets['Data']){loadCalculator(wb);tab='kpi';render();toast(`✔ تم تحميل ملف الحاسبة: ${S.map.length} مركز عمل، ${S.data.length} صف بيانات`);return;}
     const sh=sheetsOf(wb);if(!sh.length){toast('لم يتم العثور على جدول يحتوي الأعمدة المطلوبة (Work center / Day / Actual Production / Model Working Time hours)','warn');return;}
-    pending={file:f.name,sheets:sh};tab='data';render();toast('اختر الشيتات التي ترغب تستوردها من تبويب البيانات');
+    pending={file:f.name,sheets:sh};tab='data';render();toast('اختر الشهور المراد استيرادها من تبويب البيانات');
   }catch(e){console.error(e);toast('تعذر قراءة الملف: '+e.message,'warn');}};
   isJson?rd.readAsText(f):rd.readAsArrayBuffer(f);}
+const ymOf=d=>iso(d).slice(0,7);
+function impMonths(){const m=new Map();pending.sheets.forEach(s=>s.res.rows.forEach(r=>{const k=ymOf(r.day);m.set(k,(m.get(k)||0)+1);}));return [...m.entries()].sort((a,b)=>a[0]<b[0]?-1:1);}
+function impPick(){const ms=new Set([...$$('[data-mo]')].filter(c=>c.checked).map(c=>c.dataset.mo)),sh=new Set([...$$('[data-sh]')].filter(c=>c.checked).map(c=>+c.dataset.sh)),
+  f=isoToSer($('#ifrom').value)||-1e9,t=isoToSer($('#ito').value)||1e9,rows=[];
+  pending.sheets.forEach((s,i)=>{if(sh.has(i))s.res.rows.forEach(r=>{if(r.day>=f&&r.day<=t&&ms.has(ymOf(r.day)))rows.push(r);});});
+  return {rows,days:new Set(rows.map(r=>r.day)),mos:[...new Set(rows.map(r=>ymOf(r.day)))].sort()};}
+function jumpToast(msg,go){const el=document.createElement('div');el.style.cssText='position:fixed;left:0;right:0;bottom:70px;margin:auto;width:max-content;max-width:92vw;z-index:99;background:var(--card);border:1px solid var(--acc);border-radius:10px;padding:8px 12px;display:flex;gap:10px;align-items:center;box-shadow:0 4px 18px #0003';
+  el.innerHTML=`<span>${esc(msg)}</span><button class="pri">الانتقال إلى الفترة</button><button>✕</button>`;const [b1,b2]=el.querySelectorAll('button');b1.onclick=()=>{el.remove();go();};b2.onclick=()=>el.remove();document.body.appendChild(el);setTimeout(()=>el.remove(),15000);}
 function viewData(){
   const ds=S.data.map(r=>r.day),mn=ds.length?Math.min(...ds):null,mx=ds.length?Math.max(...ds):null;
   const perDay=[...R.dayCount.entries()].sort((a,b)=>a[0]-b[0]);
   let imp='';
-  if(pending){imp=`<div class="card imp"><h3>استيراد من: ${esc(pending.file)}</h3><div class="row"><label>من تاريخ</label><input type="date" id="ifrom" value="${iso(S.settings.monthStart)}"><label>طريقة الاستيراد</label>
+  if(pending){const mo=impMonths(),tot=mo.reduce((s,x)=>s+x[1],0);let a=1e9,b=-1e9;pending.sheets.forEach(s=>s.res.rows.forEach(r=>{if(r.day<a)a=r.day;if(r.day>b)b=r.day;}));
+  imp=`<div class="card imp"><h3>استيراد من: ${esc(pending.file)} <span class="muted">— ${tot.toLocaleString('en-US')} صف، من ${LT(iso(a))} إلى ${LT(iso(b))}</span></h3>
+   <div class="row"><label>الشهور الموجودة في الملف</label><button type="button" id="moall">تحديد الكل</button><button type="button" id="monone">إلغاء الكل</button></div>
+   <div class="row">${mo.map(([k,c])=>`<label class="mo"><input type="checkbox" data-mo="${k}" checked> ${LT(k)} — ${c.toLocaleString('en-US')} صف</label>`).join('')}</div>
+   <div class="row"><label>نطاق مخصص (اختياري — فارغ = كل الملف)</label><label>من</label><input type="date" id="ifrom"><label>إلى</label><input type="date" id="ito"><label>طريقة الاستيراد</label>
    <select id="imode"><option value="upd">تحديث (يمسح الأيام التي في الملف ويضيفها)</option><option value="add">إضافة إلى البيانات الحالية</option><option value="rep">استبدال كل البيانات</option></select></div>
-   <div class="tw"><table class="kt"><thead><tr><th></th><th>الشيت</th><th>صفوف</th><th>أول يوم</th><th>آخر يوم</th></tr></thead><tbody>${pending.sheets.map((s,i)=>{const d=s.res.rows.map(r=>r.day);return `<tr><td><input type="checkbox" data-sh="${i}" ${Math.max(...d)>=S.settings.monthStart?'checked':''}></td><td class="dn">${esc(s.name)}</td><td>${s.res.rows.length}</td><td>${iso(Math.min(...d))}</td><td>${iso(Math.max(...d))}</td></tr>`;}).join('')}</tbody></table></div>
-   <button class="pri" id="doimp">تنفيذ الاستيراد</button> <button id="cancelimp">إلغاء</button></div>`;}
+   <div class="tw"><table class="kt"><thead><tr><th></th><th>الشيت</th><th>صفوف</th><th>أول يوم</th><th>آخر يوم</th></tr></thead><tbody>${pending.sheets.map((s,i)=>{const d=s.res.rows.map(r=>r.day);return `<tr><td><input type="checkbox" data-sh="${i}" checked></td><td class="dn">${esc(s.name)}</td><td>${s.res.rows.length}</td><td>${iso(d.reduce((x,y)=>x<y?x:y))}</td><td>${iso(d.reduce((x,y)=>x>y?x:y))}</td></tr>`;}).join('')}</tbody></table></div>
+   <div class="row"><b id="impn"></b></div><button class="pri" id="doimp">تنفيذ الاستيراد</button> <button id="cancelimp">إلغاء</button></div>`;}
   return imp+`<div class="grid2"><div class="card"><h3>البيانات الحالية</h3><p><b>${S.data.length}</b> صف${ds.length?` — من ${LT(iso(mn))} إلى ${LT(iso(mx))}`:''}</p>
    <div class="row"><input type="file" id="f2" accept=".xlsx,.xlsm,.xls,.csv"><button id="clr" class="del">مسح كل البيانات</button></div>
    <h4>أو الصق من Excel</h4><textarea id="paste" rows="4" placeholder="انسخ الصفوف من Excel (مع صف العناوين) والصقها هنا"></textarea><button id="dopaste">استيراد المحتوى الملصوق</button></div>
    <div class="card"><h3>الصفوف في كل يوم</h3><div class="tw" style="max-height:260px"><table class="kt"><thead><tr><th>اليوم</th><th>عدد الصفوف</th><th>يوم عمل؟</th></tr></thead><tbody>${perDay.map(([d,c])=>`<tr><td>${iso(d)}</td><td>${c}</td><td>${c>=Math.max(1,S.settings.thr)&&!(S.daysOff||[]).includes(d)?'✔':'—'}</td></tr>`).join('')}</tbody></table></div></div></div>
    <div class="card"><h3>معاينة (أول 30 صف)</h3><div class="tw"><table class="kt"><thead><tr><th>Work Center</th><th>اليوم</th><th>الصنف</th><th>زمن الدورة (ث)</th><th>الكمية</th><th>ساعات التشغيل</th></tr></thead><tbody>${S.data.slice(0,30).map(r=>`<tr><td>${esc(r.wc)}</td><td>${iso(r.day)}</td><td>${esc(r.prod)}</td><td>${r.cyc}</td><td>${r.qty}</td><td>${r.hrs}</td></tr>`).join('')}</tbody></table></div></div>`;}
-function importRows(rows,mode,from){rows=rows.filter(r=>r.day>=from);if(!rows.length)return toast('لا توجد صفوف بعد هذا التاريخ','warn');
+function importRows(rows,mode){if(!rows.length)return toast('لا توجد صفوف للاستيراد','warn');
   if(mode==='rep')S.data=rows;else if(mode==='upd'){const ds=new Set(rows.map(r=>r.day));S.data=S.data.filter(r=>!ds.has(r.day)).concat(rows);}else S.data=S.data.concat(rows);
-  S.data.sort((a,b)=>a.day-b.day);save();pending=null;render();const days=new Set(rows.map(r=>r.day)).size;
-  toast(`✔ تم استيراد ${rows.length} صف (${days} يوم) — إجمالي البيانات ${S.data.length} صف`+(R.unmapped.length?` — ⚠ ${R.unmapped.length} اسم جديد غير موجود في الخريطة`:''),R.unmapped.length?'warn':'ok');}
+  S.data.sort((a,b)=>a.day-b.day);save();pending=null;render();const dset=new Set(rows.map(r=>r.day)),days=dset.size;
+  toast(`✔ تم استيراد ${rows.length} صف (${days} يوم) — إجمالي البيانات ${S.data.length} صف`+(R.unmapped.length?` — ⚠ ${R.unmapped.length} اسم جديد غير موجود في الخريطة`:''),R.unmapped.length?'warn':'ok');
+  const out=[...dset].filter(d=>d<R.pFrom||d>R.pTo);
+  if(out.length){const m0=isoToSer(iso(Math.max(...out)).slice(0,7)+'-01');jumpToast(`${out.length} يوم من المستورد خارج فترة مؤشرات الأداء الحالية (${iso(R.pFrom)} → ${iso(R.pTo)})`,()=>{tab='kpi';setPeriod(m0,K.eomonth(m0));});}}
 function bindData(){const f2=$('#f2');if(f2)f2.onchange=e=>{if(e.target.files[0])readFile(e.target.files[0]);};
   $('#clr').onclick=async()=>{if(await ask('مسح كل البيانات؟'))({}),(S.data=[],save(),render(),toast('تم مسح البيانات'));};
   $('#dopaste').onclick=()=>{const t=$('#paste').value.trim();if(!t)return;const aoa=t.split(/\r?\n/).map(l=>l.split('\t'));const p=parseAOA(aoa);
     if(!p||p.error)return toast(p?p.error:'لم يتم العثور على صف العناوين (Work center ...)','warn');pending={file:'اللصق',sheets:[{name:'الملصوق',res:p}]};render();};
-  if(pending){$('#cancelimp').onclick=()=>{pending=null;render();};$('#doimp').onclick=()=>{const rows=[];$$('[data-sh]').forEach(c=>{if(c.checked)rows.push(...pending.sheets[+c.dataset.sh].res.rows);});
-    if(!rows.length)return toast('اختر شيت','warn');importRows(rows,$('#imode').value,isoToSer($('#ifrom').value)||0);};}}
+  if(pending){const upd=()=>{const p=impPick();$('#impn').textContent=`المحدد: ${p.rows.length.toLocaleString('en-US')} صف — ${p.days.size} يوم — ${p.mos.length} شهر`;};
+    $$('[data-mo],[data-sh]').forEach(c=>c.onchange=upd);$('#ifrom').onchange=$('#ito').onchange=upd;
+    $('#moall').onclick=()=>{$$('[data-mo]').forEach(c=>c.checked=true);upd();};$('#monone').onclick=()=>{$$('[data-mo]').forEach(c=>c.checked=false);upd();};
+    $('#cancelimp').onclick=()=>{pending=null;render();};
+    $('#doimp').onclick=async()=>{const p=impPick();if(!p.rows.length)return toast('لا توجد صفوف محددة','warn');const mode=$('#imode').value,MN={upd:'تحديث',add:'إضافة',rep:'استبدال كل البيانات'};
+      const old=mode==='upd'?S.data.filter(r=>p.days.has(r.day)).length:mode==='rep'?S.data.length:0;
+      const msg=`سيتم استيراد ${p.rows.length.toLocaleString('en-US')} صف (${p.days.size} يوم) — الشهور: ${p.mos.join('، ')} — الطريقة: ${MN[mode]}`+(old?` — سيُحذف ${old.toLocaleString('en-US')} صف موجود`:'');
+      if(!await ask(msg,'نعم، استورد'))return;importRows(p.rows,mode);};upd();}}
+
 function viewGuide(){return `<div class="card guide"><h3>شرح سريع</h3>
  <p><b>① استغلال الطاقة:</b> الإنتاج الفعلي (كمية) ÷ الطاقة القصوى (كمية). الطاقة القصوى = الكمية × الزمن المخطط ÷ الزمن المثالي، من الأيام التي بها إنتاج فقط. الهدف 85%.</p>
  <p><b>② الأداء:</b> الزمن المثالي للإنتاج الفعلي ÷ زمن التشغيل الفعلي (ساعات Model Working Time hours بدون صفوف "توقف"). الهدف 100%.</p>
@@ -1638,7 +1684,7 @@ async function cloudInit(){const db=await claude.use('db');if(!db){CLOUD.status=
 const TABS=[['entry','تسجيل البيانات',viewEntry,bindEntry],['kpi','مؤشرات الأداء',viewKpi,bindKpi],['log','السجل اليومي',viewLog,bindLog],['tot','إجماليات مراكز العمل',viewTot,bindTot],['close','التصنيع على النظام',viewClose,bindClose],['dt','ساعات التوقف',viewDT,bindDT],['stops','التوقفات المفترضة',viewStops,bindStops],['map','مراكز العمل',viewMap,bindMap],['set','الاستبعاد والإعدادات',viewSettings,bindSettings],['data','البيانات',viewData,bindData],['guide','دليل الاستخدام',viewGuide,()=>{}]];
 
 /* ================= GitHub Pages mode: data.json in the repo, token typed once and kept in this browser only ================= */
-let ghDirty=false,ghBusy=false,ghLast=null,ghBaseObj=null,ghT=0,ghLastPull=0;const GHB=KEY+'_ghbase',ghVol=['selDay','lastEntryDay','monthStart'];
+let ghDirty=false,ghBusy=false,ghLast=null,ghBaseObj=null,ghT=0,ghLastPull=0;const GHB=KEY+'_ghbase',ghVol=['selDay','lastEntryDay','monthStart','kpiFrom','kpiTo'];
 const rowSig=r=>JSON.stringify([r[0],r[1],r[2],r[3],r[4],r[5],r[6]||0]);
 const parseState=txt=>{const o=JSON.parse(txt);o.data=o.data||[];o.settings=o.settings||{};return o;};
 const rawOf=()=>JSON.parse(ser());
