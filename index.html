@@ -904,7 +904,7 @@ function viewData(){
    <div class="row"><label>الشهور الموجودة في الملف</label><button type="button" id="moall">تحديد الكل</button><button type="button" id="monone">إلغاء الكل</button></div>
    <div class="row">${mo.map(([k,c])=>`<label class="mo"><input type="checkbox" data-mo="${k}" checked> ${LT(k)} — ${c.toLocaleString('en-US')} صف</label>`).join('')}</div>
    <div class="row"><label>نطاق مخصص (اختياري — فارغ = كل الملف)</label><label>من</label><input type="date" id="ifrom"><label>إلى</label><input type="date" id="ito"><label>طريقة الاستيراد</label>
-   <select id="imode"><option value="upd">تحديث (يمسح الأيام التي في الملف ويضيفها)</option><option value="add">إضافة إلى البيانات الحالية</option><option value="rep">استبدال كل البيانات</option></select></div>
+   <select id="imode"><option value="upd">تحديث (يمسح الأيام التي في الملف ويضيفها)</option><option value="add">إضافة إلى البيانات الحالية</option><option value="rep">استبدال كل البيانات</option><option value="mrg">دمج: إضافة الساعات والزمن النظري الناقصين فقط (بدون إضافة صفوف)</option></select></div>
    <div class="tw"><table class="kt"><thead><tr><th></th><th>الشيت</th><th>صفوف</th><th>أول يوم</th><th>آخر يوم</th></tr></thead><tbody>${pending.sheets.map((s,i)=>{const d=s.res.rows.map(r=>r.day);return `<tr><td><input type="checkbox" data-sh="${i}" checked></td><td class="dn">${esc(s.name)}</td><td>${s.res.rows.length}</td><td>${iso(d.reduce((x,y)=>x<y?x:y))}</td><td>${iso(d.reduce((x,y)=>x>y?x:y))}</td></tr>`;}).join('')}</tbody></table></div>
    <div class="row"><b id="impn"></b></div><button class="pri" id="doimp">تنفيذ الاستيراد</button> <button id="cancelimp">إلغاء</button></div>`;}
   return imp+`<div class="grid2"><div class="card"><h3>البيانات الحالية</h3><p><b>${S.data.length}</b> صف${ds.length?` — من ${LT(iso(mn))} إلى ${LT(iso(mx))}`:''}</p>
@@ -912,7 +912,21 @@ function viewData(){
    <h4>أو الصق من Excel</h4><textarea id="paste" rows="4" placeholder="انسخ الصفوف من Excel (مع صف العناوين) والصقها هنا"></textarea><button id="dopaste">استيراد المحتوى الملصوق</button></div>
    <div class="card"><h3>الصفوف في كل يوم</h3><div class="tw" style="max-height:260px"><table class="kt"><thead><tr><th>اليوم</th><th>عدد الصفوف</th><th>يوم عمل؟</th></tr></thead><tbody>${perDay.map(([d,c])=>`<tr><td>${iso(d)}</td><td>${c}</td><td>${c>=Math.max(1,S.settings.thr)&&!(S.daysOff||[]).includes(d)?'✔':'—'}</td></tr>`).join('')}</tbody></table></div></div></div>
    <div class="card"><h3>معاينة (أول 30 صف)</h3><div class="tw"><table class="kt"><thead><tr><th>Work Center</th><th>اليوم</th><th>الصنف</th><th>زمن الدورة (ث)</th><th>الكمية</th><th>ساعات التشغيل</th></tr></thead><tbody>${S.data.slice(0,30).map(r=>`<tr><td>${esc(r.wc)}</td><td>${iso(r.day)}</td><td>${esc(r.prod)}</td><td>${r.cyc}</td><td>${r.qty}</td><td>${r.hrs}</td></tr>`).join('')}</tbody></table></div></div>`;}
+function mergePlan(rows){const nk=r=>JSON.stringify([String(r.wc||'').trim(),r.day,String(r.prod||'').trim()]);
+  const idx=new Map();S.data.forEach(r=>{if(r.x&&r.x.draft)return;const k=nk(r);if(!idx.has(k))idx.set(k,[]);idx.get(k).push(r);});
+  const grp=new Map();rows.forEach(r=>{const k=nk(r);if(!grp.has(k))grp.set(k,[]);grp.get(k).push(r);});
+  const used=new Set(),ops=[];let none=0,full=0,amb=0;
+  grp.forEach((imps,k)=>{const cands=idx.get(k)||[];
+    imps.forEach(im=>{let t=cands.find(c=>!used.has(c)&&+c.qty===+im.qty);
+      if(!t&&cands.length===imps.length&&cands.filter(c=>!used.has(c)).length===imps.length-imps.indexOf(im)){const un=cands.filter(c=>!used.has(c));if(un.length===1)t=un[0];}
+      if(!t){if(cands.length)amb++;else none++;return;}
+      used.add(t);const o={t,hrs:null,cyc:null};
+      if(!(+t.hrs>0)&&+im.hrs>0)o.hrs=+im.hrs;if(!(+t.cyc>0)&&+im.cyc>0)o.cyc=+im.cyc;
+      if(o.hrs==null&&o.cyc==null)full++;else ops.push(o);});});
+  return {ops,none,full,amb,hrsN:ops.filter(o=>o.hrs!=null).length,cycN:ops.filter(o=>o.cyc!=null).length};}
+function mergeText(rows){const m=mergePlan(rows);return `سيتم تحديث ${m.ops.length} صف موجود: إضافة ساعات التشغيل في ${m.hrsN} صف، والزمن النظري في ${m.cycN} صف. لن تُضاف صفوف جديدة. ${m.full} صف مسجل له ساعات وزمن بالفعل (لن يتغير)، ${m.none+m.amb} صف في الملف مش لاقي له مقابل (لن يُضاف).`;}
 function importRows(rows,mode){if(!rows.length)return toast('لا توجد صفوف للاستيراد','warn');
+  if(mode==='mrg'){const m=mergePlan(rows);m.ops.forEach(o=>{if(o.hrs!=null)o.t.hrs=o.hrs;if(o.cyc!=null)o.t.cyc=o.cyc;});save();pending=null;render();toast(`✔ دمج: تم تحديث ${m.ops.length} صف (ساعات ${m.hrsN}، زمن نظري ${m.cycN}) — بدون إضافة صفوف. غير مطابق: ${m.none+m.amb}`,'ok');return;}
   if(mode==='rep')S.data=rows;else if(mode==='upd'){const ds=new Set(rows.map(r=>r.day));S.data=S.data.filter(r=>!ds.has(r.day)).concat(rows);}else S.data=S.data.concat(rows);
   S.data.sort((a,b)=>a.day-b.day);save();pending=null;render();const dset=new Set(rows.map(r=>r.day)),days=dset.size;
   toast(`✔ تم استيراد ${rows.length} صف (${days} يوم) — إجمالي البيانات ${S.data.length} صف`+(R.unmapped.length?` — ⚠ ${R.unmapped.length} اسم جديد غير موجود في الخريطة`:''),R.unmapped.length?'warn':'ok');
@@ -926,9 +940,10 @@ function bindData(){const f2=$('#f2');if(f2)f2.onchange=e=>{if(e.target.files[0]
     $$('[data-mo],[data-sh]').forEach(c=>c.onchange=upd);$('#ifrom').onchange=$('#ito').onchange=upd;
     $('#moall').onclick=()=>{$$('[data-mo]').forEach(c=>c.checked=true);upd();};$('#monone').onclick=()=>{$$('[data-mo]').forEach(c=>c.checked=false);upd();};
     $('#cancelimp').onclick=()=>{pending=null;render();};
-    $('#doimp').onclick=async()=>{const p=impPick();if(!p.rows.length)return toast('لا توجد صفوف محددة','warn');const mode=$('#imode').value,MN={upd:'تحديث',add:'إضافة',rep:'استبدال كل البيانات'};
+    $('#doimp').onclick=async()=>{const p=impPick();if(!p.rows.length)return toast('لا توجد صفوف محددة','warn');const mode=$('#imode').value,MN={upd:'تحديث',add:'إضافة',rep:'استبدال كل البيانات',mrg:'دمج الساعات والزمن النظري'};
       const old=mode==='upd'?S.data.filter(r=>p.days.has(r.day)).length:mode==='rep'?S.data.length:0;
       let msg=`سيتم استيراد ${p.rows.length.toLocaleString('en-US')} صف (${p.days.size} يوم) — الشهور: ${p.mos.join('، ')} — الطريقة: ${MN[mode]}`+(old?` — سيُحذف ${old.toLocaleString('en-US')} صف موجود`:'');
+      if(mode==='mrg')msg=mergeText(p.rows);
       msg+=(window.__impX?window.__impX(p,mode):'');if(!await ask(msg,'نعم، استورد'))return;importRows(p.rows,mode);};upd();}}
 
 function viewGuide(){return `<div class="card guide"><h3>شرح سريع</h3>
@@ -1957,7 +1972,7 @@ new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});w
    logDiff(df);IMP=null;PREV=cur;S.audit=AUD;LSs('jv_audit',AUD);}catch(e){console.error('audit',e);}
   return _save.apply(this,arguments);};
  const _as=applyState;applyState=function(){const before=PREV,r=_as.apply(this,arguments);try{const cur=snap(),df=diff(before,cur);if(df.add.length||df.rem.length||df.map||df.excl){addA('sync',`مزامنة (جيت هب): ${df.add.length} صف جديد أو معدّل، ${df.rem.length} صف محذوف`+(df.days.length?' — '+dl(df.days):''));}PREV=cur;S.audit=AUD;LSs('jv_audit',AUD);}catch(e){}return r;};
- const _ir=importRows;importRows=function(rows,mode){IMP='استيراد '+rows.length+' صف ('+({upd:'تحديث',add:'إضافة',rep:'استبدال'}[mode]||mode)+')';CTX={k:'import',s:IMP};const n=S.data.length;_ir.apply(this,arguments);IMP=null;CTX=null;};
+ const _ir=importRows;importRows=function(rows,mode){IMP='استيراد '+rows.length+' صف ('+({upd:'تحديث',add:'إضافة',rep:'استبدال',mrg:'دمج'}[mode]||mode)+')';CTX={k:'import',s:IMP};const n=S.data.length;_ir.apply(this,arguments);IMP=null;CTX=null;};
  const _dl=download;download=function(){LSs('jv_lastbk',Date.now());return _dl.apply(this,arguments);};
  /* import preview extras (used by the import confirmation) */
  window.__impX=function(p,mode){try{const known=new Set(S.map.map(m=>String(m.name).trim().toLowerCase()));const unk=[...new Set(p.rows.map(r=>String(r.wc).trim()).filter(w=>w&&!known.has(w.toLowerCase())))];
@@ -2358,7 +2373,7 @@ new MutationObserver(fhQ).observe(document.body,{childList:true,subtree:true});w
 })();
 /* ===== v4.1 auto-update: version check against version.json (no hard refresh needed) ===== */
 (function(){
- const BUILD='v5h-20261124154055';window.__BUILD=BUILD;
+ const BUILD='v5i-20261126103000';window.__BUILD=BUILD;
  if(typeof HOSTED!=='undefined'&&HOSTED)return;
  if(!/^https?:/.test(location.protocol))return;
  let shown=false,hiddenAt=0,busy=false;
